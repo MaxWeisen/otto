@@ -1,0 +1,48 @@
+# ---- Secrets / env ----
+.env
+.env.*
+!.env.example
+*.local
+
+# ---- Go (backend/) ----
+# Binaries / build output
+bin/
+dist/
+*.exe
+*.test
+*.out
+# Go workspace file
+go.work
+go.work.sum
+
+# ---- Node / Next.js (frontend/) ----
+node_modules/
+.pnpm-store/
+.next/
+out/
+build/
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
+
+# ---- Logs ----
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ---- Uploaded manuals / local data (dev) ----
+# PDFs users upload while developing
+uploads/
+data/
+*.pdf
+!docs/**/*.pdf   # allow intentionally-committed public-domain sample docs
+
+# ---- Editor / OS ----
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
