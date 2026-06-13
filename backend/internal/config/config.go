@@ -15,7 +15,6 @@ type Config struct {
 
 type DatabaseConfig struct {
 	DatabaseURL string
-	Port        string
 }
 
 func Load() (*Config, error) {
@@ -29,7 +28,6 @@ func Load() (*Config, error) {
 		Port: getEnv("PORT", "3333"),
 		DB: DatabaseConfig{
 			DatabaseURL: os.Getenv("DB_URL"),
-			Port:        os.Getenv("DB_PORT"),
 		},
 	}
 	return cfg, nil
