@@ -4,7 +4,8 @@
   "private": true,
   "description": "Otto monorepo — Go API + Next.js frontend",
   "scripts": {
-    "commit": "cz"
+    "commit": "cz",
+    "dev": "concurrently -n db,api,web -c blue,green,magenta \"docker compose up db\" \"cd backend && go run ./cmd/otto\" \"cd frontend && pnpm dev\""
   },
   "config": {
     "commitizen": {
@@ -13,6 +14,7 @@
   },
   "devDependencies": {
     "commitizen": "^4.3.1",
+    "concurrently": "^10.0.3",
     "cz-conventional-changelog": "^3.3.0"
   }
 }
