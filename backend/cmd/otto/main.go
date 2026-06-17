@@ -44,17 +44,7 @@ func main() {
 	r.Get("/auth/google/login", authHandler.LoginHandler)
 	r.Get("/auth/google/callback", authHandler.CallbackHandler)
 	// health
-	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		res, err := json.Marshal(map[string]string{"status": "ok"})
-
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(res)
-	})
+	r.Get("/healthz", healthzHandler)
 
 	err = http.ListenAndServe(":"+cfg.Port, r)
 
@@ -80,4 +70,17 @@ func requestLogger(next http.Handler) http.Handler {
 			"request_id", middleware.GetReqID(r.Context()),
 		)
 	})
+}
+
+// route handlers
+func healthzHandler(w http.ResponseWriter, r *http.Request) {
+	res, err := json.Marshal(map[string]string{"status": "ok"})
+
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(res)
 }
