@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/maxweisen/otto/backend/internal/auth"
 	"github.com/maxweisen/otto/backend/internal/config"
 )
 
@@ -19,17 +22,28 @@ func main() {
 
 	// load environment variables
 	cfg, err := config.Load()
-
 	if err != nil {
 		slog.Error("failed to load environment variables", "err", err)
 		os.Exit(1)
 	}
+
+	pool, err := pgxpool.New(context.Background(), cfg.DB.DatabaseURL)
+	if err != nil {
+		slog.Error("unable to connect to database", "err", err)
+		os.Exit(1)
+	}
+	defer pool.Close()
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(requestLogger)
 	r.Use(middleware.Recoverer)
 
+	// authentication
+	authHandler := auth.NewHandler(cfg, pool)
+	r.Get("/auth/google/login", authHandler.LoginHandler)
+	r.Get("/auth/google/callback", authHandler.CallbackHandler)
+	// health
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		res, err := json.Marshal(map[string]string{"status": "ok"})
 
@@ -50,6 +64,7 @@ func main() {
 	}
 }
 
+// middleware
 func requestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)

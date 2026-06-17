@@ -9,12 +9,19 @@ import (
 )
 
 type Config struct {
-	DB   DatabaseConfig
-	Port string
+	DB    DatabaseConfig
+	OAuth OAuthConfig
+	Port  string
 }
 
 type DatabaseConfig struct {
 	DatabaseURL string
+}
+
+type OAuthConfig struct {
+	ClientID     string
+	ClientSecret string
+	RedirectURL  string
 }
 
 func Load() (*Config, error) {
@@ -28,6 +35,11 @@ func Load() (*Config, error) {
 		Port: getEnv("PORT", "3333"),
 		DB: DatabaseConfig{
 			DatabaseURL: os.Getenv("DB_URL"),
+		},
+		OAuth: OAuthConfig{
+			ClientID:     os.Getenv("OAUTH_CLIENT_ID"),
+			ClientSecret: os.Getenv("OAUTH_CLIENT_SECRET"),
+			RedirectURL:  os.Getenv("OAUTH_REDIRECT_URL"),
 		},
 	}
 	return cfg, nil
