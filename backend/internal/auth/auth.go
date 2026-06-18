@@ -2,6 +2,8 @@ package auth
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -51,7 +53,8 @@ func (h *Handler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		Value:    randomText,
 		MaxAge:   320,
 		HttpOnly: true,
-		Secure:   isProd(),
+		Path:     "/",
+		Secure:   !isDev(),
 		SameSite: http.SameSiteLaxMode,
 	}
 	http.SetCookie(w, &stateCookie)
@@ -71,7 +74,6 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	// Handle the exchange code to initiate a transport.
 	state := r.URL.Query().Get("state")
 	cookie, err := r.Cookie("oauth_state_token")
-
 	// CSRF Protection
 	// If cookie returns an error or does not match the URL query state
 	// respond with an HTTP 400 status
@@ -84,7 +86,8 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		Name:     "oauth_state_token",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   isProd(),
+		Path:     "/",
+		Secure:   !isDev(),
 		SameSite: http.SameSiteLaxMode,
 	})
 
@@ -97,12 +100,10 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	client := h.oauthConfig.Client(r.Context(), token)
 	res, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
-
 	if err != nil {
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
-
 	if res.StatusCode != http.StatusOK {
 		http.Error(w, "failed to get user info", http.StatusInternalServerError)
 		return
@@ -112,13 +113,80 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	defer res.Body.Close()
 	var userInfo GoogleUserInfo
 	err = json.NewDecoder(res.Body).Decode(&userInfo)
-
 	if err != nil {
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
+
+	// upsert user and session
+	var userID int64
+	err = h.db.QueryRow(r.Context(),
+		`INSERT INTO users (google_sub, email, name, avatar_url)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (google_sub)
+		DO UPDATE SET email = EXCLUDED.email, name = EXCLUDED.name, avatar_url = EXCLUDED.avatar_url
+		RETURNING ID`,
+		userInfo.ID, userInfo.Email, userInfo.Name, userInfo.Picture,
+	).Scan(&userID)
+	if err != nil {
+		http.Error(w, "unable to create user", http.StatusInternalServerError)
+		return
+	}
+
+	sessionToken := rand.Text()
+	raw := sha256.Sum256([]byte(sessionToken))
+	sessionTokenHash := hex.EncodeToString(raw[:])
+
+	tx, err := h.db.Begin(r.Context())
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	// delete any existing sessions
+	_, err = tx.Exec(r.Context(),
+		`DELETE FROM sessions WHERE user_id = $1`,
+		userID,
+	)
+	if err != nil {
+		http.Error(w, "unable to delete previous session", http.StatusInternalServerError)
+		return
+	}
+
+	// create a new session
+	_, err = tx.Exec(r.Context(),
+		`INSERT INTO sessions (user_id, token)
+		VALUES ($1, $2)
+		`,
+		userID, sessionTokenHash,
+	)
+	if err != nil {
+		http.Error(w, "unable to create session", http.StatusInternalServerError)
+		return
+	}
+
+	// commit changes if successful
+	err = tx.Commit(r.Context())
+	if err != nil {
+		http.Error(w, "failed to create a session", http.StatusInternalServerError)
+		return
+	}
+
+	// create session cookie upon success
+	http.SetCookie(w, &http.Cookie{
+		Name:     "otto_session_token",
+		Value:    sessionToken,
+		MaxAge:   60 * 60 * 24, // 24 hours
+		HttpOnly: true,
+		Secure:   !isDev(),
+		Path:     "/",
+		SameSite: http.SameSiteStrictMode,
+	})
+
+	http.Redirect(w, r, "/", http.StatusFound)
 }
 
-func isProd() bool {
-	return os.Getenv("ENV") == "production"
+func isDev() bool {
+	return os.Getenv("ENV") == "development"
 }
