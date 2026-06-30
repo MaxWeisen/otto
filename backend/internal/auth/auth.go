@@ -1,12 +1,14 @@
 package auth
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"os"
+	"strconv"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -15,6 +17,7 @@ import (
 	"github.com/maxweisen/otto/backend/internal/config"
 )
 
+// types
 type Handler struct {
 	oauthConfig *oauth2.Config
 	db          *pgxpool.Pool
@@ -27,6 +30,19 @@ type GoogleUserInfo struct {
 	Picture string `json:"picture"`
 }
 
+type User struct {
+	Id        int64
+	Email     string
+	Name      string
+	AvatarUrl string
+}
+
+type contextKey string
+
+// constants
+const userContextKey contextKey = "user"
+
+// handlers
 func NewHandler(cfg *config.Config, db *pgxpool.Pool) *Handler {
 	h := Handler{
 		oauthConfig: &oauth2.Config{
@@ -134,8 +150,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sessionToken := rand.Text()
-	raw := sha256.Sum256([]byte(sessionToken))
-	sessionTokenHash := hex.EncodeToString(raw[:])
+	sessionTokenHash := getSessionTokenHash(sessionToken)
 
 	tx, err := h.db.Begin(r.Context())
 	if err != nil {
@@ -156,8 +171,8 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	// create a new session
 	_, err = tx.Exec(r.Context(),
-		`INSERT INTO sessions (user_id, token)
-		VALUES ($1, $2)
+		`INSERT INTO sessions (user_id, token, expires_at)
+		VALUES ($1, $2, now() + interval '3 days' )
 		`,
 		userID, sessionTokenHash,
 	)
@@ -177,16 +192,82 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "otto_session_token",
 		Value:    sessionToken,
-		MaxAge:   60 * 60 * 24, // 24 hours
+		MaxAge:   60 * 60 * 24 * 3, // 3 days
 		HttpOnly: true,
 		Secure:   !isDev(),
 		Path:     "/",
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteLaxMode,
 	})
 
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
+func (h *Handler) SessionMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token, err := r.Cookie("otto_session_token")
+		if err != nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		sessionTokenHash := getSessionTokenHash(token.Value)
+
+		var user User
+		err = h.db.QueryRow(r.Context(),
+			`SELECT u.id, u.email, u.name, u.avatar_url
+		FROM sessions s
+		JOIN users u ON u.id = s.user_id
+		WHERE s.token = $1 AND s.expires_at > now()
+		`,
+			sessionTokenHash,
+		).Scan(&user.Id, &user.Email, &user.Name, &user.AvatarUrl)
+		if err != nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), userContextKey, &user)
+
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func (h *Handler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
+	user, ok := UserFromContext(r.Context())
+
+	if !ok {
+		http.Error(w, "Unauthorized user. Please login and try again", http.StatusUnauthorized)
+		return
+	}
+
+	res, err := json.Marshal(map[string]string{
+		"name":      user.Name,
+		"id":        strconv.FormatInt(user.Id, 10),
+		"email":     user.Email,
+		"avatarUrl": user.AvatarUrl,
+	})
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(res)
+}
+
+// helper funtions
 func isDev() bool {
 	return os.Getenv("ENV") == "development"
+}
+
+func UserFromContext(ctx context.Context) (*User, bool) {
+	val := ctx.Value(userContextKey)
+	user, ok := val.(*User)
+	return user, ok
+}
+
+func getSessionTokenHash(token string) string {
+	raw := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(raw[:])
 }

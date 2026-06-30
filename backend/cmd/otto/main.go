@@ -34,17 +34,27 @@ func main() {
 	}
 	defer pool.Close()
 
+	authHandler := auth.NewHandler(cfg, pool)
+
 	r := chi.NewRouter()
+
+	// middlewares
 	r.Use(middleware.RequestID)
 	r.Use(requestLogger)
 	r.Use(middleware.Recoverer)
 
-	// authentication
-	authHandler := auth.NewHandler(cfg, pool)
+	// public routes
 	r.Get("/auth/google/login", authHandler.LoginHandler)
 	r.Get("/auth/google/callback", authHandler.CallbackHandler)
 	// health
 	r.Get("/healthz", healthzHandler)
+
+	// authenticated routes
+	r.Group(func(r chi.Router) {
+		r.Use(authHandler.SessionMiddleware)
+
+		r.Get("/auth/me", authHandler.GetCurrentUser)
+	})
 
 	err = http.ListenAndServe(":"+cfg.Port, r)
 
