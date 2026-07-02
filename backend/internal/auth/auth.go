@@ -86,7 +86,13 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	// user clicks "cancel" on oauth page
 	errParam := r.URL.Query().Get("error")
 	if errParam != "" {
-		slog.Error("error from google oauth", "err", nil, "request_id", middleware.GetReqID(r.Context()))
+		slog.Error(
+			"error from google oauth",
+			"err",
+			nil,
+			"request_id",
+			middleware.GetReqID(r.Context()),
+		)
 		http.Error(w, "login cancelled", http.StatusBadRequest)
 		return
 	}
@@ -97,7 +103,13 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	// If cookie returns an error or does not match the URL query state
 	// respond with an HTTP 400 status
 	if err != nil || state != cookie.Value {
-		slog.Error("cookie error", "err", err, "request_id", middleware.GetReqID(r.Context()))
+		slog.Error(
+			"cookie error",
+			"err",
+			err,
+			"request_id",
+			middleware.GetReqID(r.Context()),
+		)
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
@@ -139,7 +151,13 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if res.StatusCode != http.StatusOK {
-		slog.Error("failed to get user info", "err", err, "request_id", middleware.GetReqID(r.Context()))
+		slog.Error(
+			"failed to get user info",
+			"err",
+			err,
+			"request_id",
+			middleware.GetReqID(r.Context()),
+		)
 		http.Error(w, "failed to get user info", http.StatusInternalServerError)
 		return
 	}
@@ -170,7 +188,13 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		userInfo.ID, userInfo.Email, userInfo.Name, userInfo.Picture,
 	).Scan(&userID)
 	if err != nil {
-		slog.Error("user upsert failed", "err", err, "request_id", middleware.GetReqID(r.Context()))
+		slog.Error(
+			"user upsert failed",
+			"err",
+			err,
+			"request_id",
+			middleware.GetReqID(r.Context()),
+		)
 		http.Error(w, "unable to create user", http.StatusInternalServerError)
 		return
 	}
@@ -180,7 +204,13 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := h.db.Begin(r.Context())
 	if err != nil {
-		slog.Error("failed to begin db transaction", "err", err, "request_id", middleware.GetReqID(r.Context()))
+		slog.Error(
+			"failed to begin db transaction",
+			"err",
+			err,
+			"request_id",
+			middleware.GetReqID(r.Context()),
+		)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -192,8 +222,18 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		userID,
 	)
 	if err != nil {
-		slog.Error("unable to delete previous session", "err", err, "request_id", middleware.GetReqID(r.Context()))
-		http.Error(w, "unable to delete previous session", http.StatusInternalServerError)
+		slog.Error(
+			"unable to delete previous session",
+			"err",
+			err,
+			"request_id",
+			middleware.GetReqID(r.Context()),
+		)
+		http.Error(
+			w,
+			"unable to delete previous session",
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
@@ -205,16 +245,36 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		userID, sessionTokenHash,
 	)
 	if err != nil {
-		slog.Error("unable to create session", "err", err, "request_id", middleware.GetReqID(r.Context()))
-		http.Error(w, "unable to create session", http.StatusInternalServerError)
+		slog.Error(
+			"unable to create session",
+			"err",
+			err,
+			"request_id",
+			middleware.GetReqID(r.Context()),
+		)
+		http.Error(
+			w,
+			"unable to create session",
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
 	// commit changes if successful
 	err = tx.Commit(r.Context())
 	if err != nil {
-		slog.Error("failed to create a session", "err", err, "request_id", middleware.GetReqID(r.Context()))
-		http.Error(w, "failed to create a session", http.StatusInternalServerError)
+		slog.Error(
+			"failed to create a session",
+			"err",
+			err,
+			"request_id",
+			middleware.GetReqID(r.Context()),
+		)
+		http.Error(
+			w,
+			"failed to create a session",
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
@@ -266,7 +326,11 @@ func (h *Handler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 	user, ok := UserFromContext(r.Context())
 
 	if !ok {
-		http.Error(w, "Unauthorized user. Please login and try again", http.StatusUnauthorized)
+		http.Error(
+			w,
+			"Unauthorized user. Please login and try again",
+			http.StatusUnauthorized,
+		)
 		return
 	}
 
