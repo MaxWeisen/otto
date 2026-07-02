@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/maxweisen/otto/backend/internal/config"
 )
@@ -84,6 +86,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	// user clicks "cancel" on oauth page
 	errParam := r.URL.Query().Get("error")
 	if errParam != "" {
+		slog.Error("error from google oauth", "err", nil, "request_id", middleware.GetReqID(r.Context()))
 		http.Error(w, "login cancelled", http.StatusBadRequest)
 		return
 	}
@@ -94,6 +97,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	// If cookie returns an error or does not match the URL query state
 	// respond with an HTTP 400 status
 	if err != nil || state != cookie.Value {
+		slog.Error("cookie error", "err", err, "request_id", middleware.GetReqID(r.Context()))
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
@@ -110,6 +114,13 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	token, err := h.oauthConfig.Exchange(r.Context(), code)
 	if err != nil {
+		slog.Error(
+			"failed to exchange oauth auth code into token",
+			"err",
+			err,
+			"request_id",
+			middleware.GetReqID(r.Context()),
+		)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -117,10 +128,18 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	client := h.oauthConfig.Client(r.Context(), token)
 	res, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
 	if err != nil {
+		slog.Error(
+			"failed to get oauth user info",
+			"err",
+			err,
+			"request_id",
+			middleware.GetReqID(r.Context()),
+		)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	if res.StatusCode != http.StatusOK {
+		slog.Error("failed to get user info", "err", err, "request_id", middleware.GetReqID(r.Context()))
 		http.Error(w, "failed to get user info", http.StatusInternalServerError)
 		return
 	}
@@ -130,6 +149,12 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	var userInfo GoogleUserInfo
 	err = json.NewDecoder(res.Body).Decode(&userInfo)
 	if err != nil {
+		slog.Error("failed to read oauth response to parse data to create User",
+			"err",
+			err,
+			"request_id",
+			middleware.GetReqID(r.Context()),
+		)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -145,6 +170,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		userInfo.ID, userInfo.Email, userInfo.Name, userInfo.Picture,
 	).Scan(&userID)
 	if err != nil {
+		slog.Error("user upsert failed", "err", err, "request_id", middleware.GetReqID(r.Context()))
 		http.Error(w, "unable to create user", http.StatusInternalServerError)
 		return
 	}
@@ -154,6 +180,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := h.db.Begin(r.Context())
 	if err != nil {
+		slog.Error("failed to begin db transaction", "err", err, "request_id", middleware.GetReqID(r.Context()))
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -165,6 +192,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		userID,
 	)
 	if err != nil {
+		slog.Error("unable to delete previous session", "err", err, "request_id", middleware.GetReqID(r.Context()))
 		http.Error(w, "unable to delete previous session", http.StatusInternalServerError)
 		return
 	}
@@ -177,6 +205,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		userID, sessionTokenHash,
 	)
 	if err != nil {
+		slog.Error("unable to create session", "err", err, "request_id", middleware.GetReqID(r.Context()))
 		http.Error(w, "unable to create session", http.StatusInternalServerError)
 		return
 	}
@@ -184,6 +213,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	// commit changes if successful
 	err = tx.Commit(r.Context())
 	if err != nil {
+		slog.Error("failed to create a session", "err", err, "request_id", middleware.GetReqID(r.Context()))
 		http.Error(w, "failed to create a session", http.StatusInternalServerError)
 		return
 	}
