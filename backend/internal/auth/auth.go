@@ -43,6 +43,7 @@ type contextKey string
 
 // constants
 const userContextKey contextKey = "user"
+const sessionTokenKey string = "otto_session_token"
 
 // handlers
 func NewHandler(cfg *config.Config, db *pgxpool.Pool) *Handler {
@@ -280,7 +281,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	// create session cookie upon success
 	http.SetCookie(w, &http.Cookie{
-		Name:     "otto_session_token",
+		Name:     sessionTokenKey,
 		Value:    sessionToken,
 		MaxAge:   60 * 60 * 24 * 3, // 3 days
 		HttpOnly: true,
@@ -294,7 +295,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) SessionMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token, err := r.Cookie("otto_session_token")
+		token, err := r.Cookie(sessionTokenKey)
 		if err != nil {
 			next.ServeHTTP(w, r)
 			return
@@ -348,6 +349,43 @@ func (h *Handler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(res)
+}
+
+func (h *Handler) LogoutHandler(w http.ResponseWriter, r *http.Request) {
+	token, err := r.Cookie(sessionTokenKey)
+	if err != nil {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// delete session row from db
+	tokenHash := getSessionTokenHash(token.Value)
+	_, err = h.db.Exec(r.Context(),
+		`DELETE FROM sessions WHERE token = $1`,
+		tokenHash,
+	)
+	if err != nil {
+		// if unable to find session, continue to clearing cookie
+		slog.Error(
+			"unable to delete session",
+			"err",
+			err,
+			"request_id",
+			middleware.GetReqID(r.Context()),
+		)
+	}
+
+	// clear cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionTokenKey,
+		MaxAge:   -1,
+		HttpOnly: true,
+		Path:     "/",
+		Secure:   !isDev(),
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	w.WriteHeader(http.StatusOK)
 }
 
 // helper funtions

@@ -54,6 +54,7 @@ func main() {
 		r.Use(authHandler.SessionMiddleware)
 
 		r.Get("/auth/me", authHandler.GetCurrentUser)
+		r.Post("/auth/logout", authHandler.LogoutHandler)
 	})
 
 	err = http.ListenAndServe(":"+cfg.Port, r)
