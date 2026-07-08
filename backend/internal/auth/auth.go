@@ -21,8 +21,10 @@ import (
 
 // types
 type Handler struct {
-	oauthConfig *oauth2.Config
-	db          *pgxpool.Pool
+	oauthConfig  *oauth2.Config
+	db           *pgxpool.Pool
+	cookieDomain string
+	frontendURL  string
 }
 
 type GoogleUserInfo struct {
@@ -59,7 +61,9 @@ func NewHandler(cfg *config.Config, db *pgxpool.Pool) *Handler {
 			},
 			Endpoint: google.Endpoint,
 		},
-		db: db,
+		db:           db,
+		cookieDomain: cfg.CookieDomain,
+		frontendURL:  cfg.FrontendURL,
 	}
 	return &h
 }
@@ -283,6 +287,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionTokenKey,
 		Value:    sessionToken,
+		Domain:   h.cookieDomain,
 		MaxAge:   60 * 60 * 24 * 3, // 3 days
 		HttpOnly: true,
 		Secure:   !isDev(),
@@ -290,7 +295,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, h.frontendURL, http.StatusFound)
 }
 
 func (h *Handler) SessionMiddleware(next http.Handler) http.Handler {
@@ -378,6 +383,7 @@ func (h *Handler) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	// clear cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionTokenKey,
+		Domain:   h.cookieDomain,
 		MaxAge:   -1,
 		HttpOnly: true,
 		Path:     "/",

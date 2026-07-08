@@ -9,9 +9,11 @@ import (
 )
 
 type Config struct {
-	DB    DatabaseConfig
-	OAuth OAuthConfig
-	Port  string
+	CookieDomain string
+	DB           DatabaseConfig
+	FrontendURL  string
+	OAuth        OAuthConfig
+	Port         string
 }
 
 type DatabaseConfig struct {
@@ -41,6 +43,8 @@ func Load() (*Config, error) {
 			ClientSecret: os.Getenv("OAUTH_CLIENT_SECRET"),
 			RedirectURL:  os.Getenv("OAUTH_REDIRECT_URL"),
 		},
+		CookieDomain: os.Getenv("COOKIE_DOMAIN"),
+		FrontendURL:  os.Getenv("FRONTEND_URL"),
 	}
 	return cfg, nil
 }
