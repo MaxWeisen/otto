@@ -1,11 +1,12 @@
 import "server-only";
 import { cookies } from "next/headers";
+import { cache } from "react";
 
 type User = { id: string; name: string; email: string; avatarUrl: string };
 
 const SESSION_TOKEN_KEY = "otto_session_token";
 
-export async function getCurrentUser(): Promise<User | null> {
+export const getCurrentUser = cache(async (): Promise<User | null> => {
   const sessionToken = (await cookies()).get(SESSION_TOKEN_KEY);
 
   if (!sessionToken) {
@@ -24,4 +25,4 @@ export async function getCurrentUser(): Promise<User | null> {
   const user = await response.json();
 
   return user as User;
-}
+});
