@@ -7,6 +7,8 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 // toaster
 import { Toaster } from "@/components/ui/sonner";
+// theme provider
+import { ThemeProvider } from "@/components/theme-provider";
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
@@ -44,10 +46,17 @@ export default function RootLayout({
         "font-mono",
         jetbrainsMono.variable,
       )}
+      suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">
-        {children}
-        <Toaster />
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+        >
+          <Toaster />
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );
