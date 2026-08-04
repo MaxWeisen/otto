@@ -328,6 +328,23 @@ func (h *Handler) SessionMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+func RequireAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, ok := UserFromContext(r.Context())
+
+		if !ok {
+			http.Error(
+				w,
+				"Unauthorized user. Please login and try again",
+				http.StatusUnauthorized,
+			)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (h *Handler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 	user, ok := UserFromContext(r.Context())
 
