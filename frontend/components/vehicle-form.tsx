@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
 import {
@@ -108,6 +108,11 @@ export function VehicleForm({
     new Set(),
   );
   const [handledState, setHandledState] = useState(state);
+  const latestValues = useRef(values);
+
+  useEffect(() => {
+    latestValues.current = values;
+  }, [values]);
 
   // A new server response replaces any client-side errors and returns the
   // wizard to the first step that has a problem.
@@ -186,8 +191,15 @@ export function VehicleForm({
     markEdited("model");
   }
 
-  /** Fills the form from a decoded VIN and returns a summary of what changed. */
-  async function applyDecodedVin(decoded: DecodedVin): Promise<string> {
+  /**
+   * Fills the form from a decoded VIN and returns a summary of what changed,
+   * or null when the decode is no longer current. Fields edited while the
+   * decode was in flight keep the visitor's value.
+   */
+  async function applyDecodedVin(
+    decoded: DecodedVin,
+    isCurrent: () => boolean,
+  ): Promise<string | null> {
     const listed = decoded.make ? findVehicleMake(decoded.make) : undefined;
     const makeName = listed ?? decoded.make;
     let model = decoded.model;
@@ -208,24 +220,37 @@ export function VehicleForm({
       }
     }
 
-    if (decoded.make) {
+    if (!isCurrent()) {
+      return null;
+    }
+
+    const current = latestValues.current;
+    const unchanged = (field: VehicleField) => current[field] === values[field];
+    const updates: Partial<VehicleFormValues> = { vin: decoded.vin };
+
+    if (decoded.year && unchanged("year")) {
+      updates.year = String(decoded.year);
+    }
+
+    if (makeName && unchanged("make")) {
+      updates.make = makeName;
       setMakeOther(!listed);
     }
 
-    if (model) {
-      setModelOther(isModelOther);
+    const nextModel = model ?? (decoded.make ? "" : null);
+
+    if (nextModel !== null && unchanged("make") && unchanged("model")) {
+      updates.model = nextModel;
+      setModelOther(nextModel !== "" && isModelOther);
+    }
+
+    if (decoded.trim && unchanged("trim")) {
+      updates.trim = decoded.trim;
     }
 
     setFocusOther(null);
-    setValues((current) => ({
-      ...current,
-      year: decoded.year ? String(decoded.year) : current.year,
-      make: makeName ?? current.make,
-      model: model ?? (decoded.make ? "" : current.model),
-      trim: decoded.trim ?? current.trim,
-      vin: decoded.vin,
-    }));
-    markEdited("year", "make", "model", "trim", "vin");
+    setValues((latest) => ({ ...latest, ...updates }));
+    markEdited(...(Object.keys(updates) as VehicleField[]));
 
     return [decoded.year, makeName, model, decoded.trim]
       .filter(Boolean)
@@ -696,11 +721,17 @@ function VinField({
   value: string;
   onChange: (value: string) => void;
   error?: string;
-  onDecoded: (decoded: DecodedVin) => Promise<string>;
+  onDecoded: (
+    decoded: DecodedVin,
+    isCurrent: () => boolean,
+  ) => Promise<string | null>;
 }) {
   const [decode, setDecode] = useState<DecodeStatus>({ status: "idle" });
+  const decodeRequest = useRef(0);
 
   async function handleDecode() {
+    const request = ++decodeRequest.current;
+    const isCurrent = () => decodeRequest.current === request;
     const normalized = value.trim().toUpperCase();
 
     if (!normalized) {
@@ -718,9 +749,16 @@ function VinField({
     setDecode({ status: "decoding" });
 
     try {
-      const summary = await onDecoded(await decodeVin(normalized));
-      setDecode({ status: "decoded", summary });
+      const summary = await onDecoded(await decodeVin(normalized), isCurrent);
+
+      if (summary !== null && isCurrent()) {
+        setDecode({ status: "decoded", summary });
+      }
     } catch (decodeError) {
+      if (!isCurrent()) {
+        return;
+      }
+
       setDecode({
         status: "error",
         message:
@@ -753,6 +791,7 @@ function VinField({
           name="vin"
           value={value}
           onChange={(event) => {
+            decodeRequest.current += 1;
             onChange(event.target.value);
             setDecode({ status: "idle" });
           }}

@@ -763,6 +763,89 @@ describe("VIN decode", () => {
     ).toBeInTheDocument();
   });
 
+  it("ignores a decode that finishes after the VIN changed", async () => {
+    server.use(
+      http.get("*/api/vpic/decode/:vin", async () => {
+        await delay(100);
+        return HttpResponse.json(decodedVins["1HGCM82633A004352"]);
+      }),
+    );
+    const { user } = renderForm();
+
+    await user.type(vinInput(), "1HGCM82633A004352");
+    await user.click(screen.getByRole("button", { name: "Decode" }));
+    await user.clear(vinInput());
+    await user.type(vinInput(), "1HGCM82633A00435");
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Decode" })).toBeEnabled(),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    expect(screen.queryByText(/Filled in/)).not.toBeInTheDocument();
+    expect(vinInput()).toHaveValue("1HGCM82633A00435");
+    expect(yearInput()).toHaveValue("");
+    expect(makeInput()).toHaveValue("");
+  });
+
+  it("keeps fields edited while the decode was in flight", async () => {
+    server.use(
+      http.get("*/api/vpic/decode/:vin", async () => {
+        await delay(100);
+        return HttpResponse.json(decodedVins["1HGCM82633A004352"]);
+      }),
+    );
+    const { user } = renderForm();
+
+    await user.type(vinInput(), "1HGCM82633A004352");
+    await user.click(screen.getByRole("button", { name: "Decode" }));
+    await user.type(yearInput(), "2020");
+    await chooseOption(user, makeInput(), "Toyota", "Toyota");
+
+    expect(
+      await screen.findByText("2003 Honda Accord EX-V6"),
+    ).toBeInTheDocument();
+    expect(yearInput()).toHaveValue("2020");
+    expect(makeInput()).toHaveValue("Toyota");
+    await waitFor(() => expect(modelCombobox()).toBeEnabled());
+    expect(modelCombobox()).toHaveValue("");
+    expect(screen.getByRole("textbox", { name: /^Trim/ })).toHaveValue("EX-V6");
+    expect(vinInput()).toHaveValue("1HGCM82633A004352");
+  });
+
+  it("shows the model list when a decode clears an Other model", async () => {
+    server.use(
+      http.get("*/api/vpic/decode/:vin", () =>
+        HttpResponse.json({
+          vin: "1HGCM82633A004352",
+          year: 2020,
+          make: "HONDA",
+          model: null,
+          trim: null,
+        }),
+      ),
+    );
+    const { user } = renderForm();
+
+    await user.type(yearInput(), "2020");
+    await chooseOption(user, makeInput(), "Honda", "Honda");
+    await waitFor(() => expect(modelCombobox()).toBeEnabled());
+    await chooseOption(user, modelCombobox(), "Odyssey", "Other / not listed");
+    await user.type(
+      screen.getByRole("textbox", { name: "Model name" }),
+      "Odyssey",
+    );
+
+    await user.type(vinInput(), "1HGCM82633A004352");
+    await user.click(screen.getByRole("button", { name: "Decode" }));
+
+    expect(await screen.findByText("2020 Honda")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("textbox", { name: "Model name" }),
+    ).not.toBeInTheDocument();
+    expect(modelCombobox()).toHaveValue("");
+  });
+
   it("blocks Next for an invalid VIN even without decoding", async () => {
     const { user } = renderForm();
 
