@@ -45,6 +45,22 @@ func main() {
 	maintenanceService := maintenance.NewService(queries)
 	maintenanceHandler := maintenance.NewHandler(maintenanceService)
 
+	r := newRouter(authHandler, vehiclesHandler, maintenanceHandler)
+
+	err = http.ListenAndServe(":"+cfg.Port, r)
+
+	if err != nil {
+		slog.Error("could not start server", "err", err)
+		os.Exit(1)
+	}
+}
+
+// newRouter builds the API's routes and middleware.
+func newRouter(
+	authHandler *auth.Handler,
+	vehiclesHandler *vehicles.Handler,
+	maintenanceHandler *maintenance.Handler,
+) http.Handler {
 	r := chi.NewRouter()
 
 	// middlewares
@@ -72,12 +88,7 @@ func main() {
 		)
 	})
 
-	err = http.ListenAndServe(":"+cfg.Port, r)
-
-	if err != nil {
-		slog.Error("could not start server", "err", err)
-		os.Exit(1)
-	}
+	return r
 }
 
 // middleware
