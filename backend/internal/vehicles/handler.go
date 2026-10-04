@@ -9,12 +9,12 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/maxweisen/otto/backend/internal/httpx"
 	"github.com/maxweisen/otto/backend/internal/store"
+	"github.com/maxweisen/otto/backend/internal/validate"
 )
 
 const minVehicleYear = 1886
@@ -212,54 +212,15 @@ func writeServiceError(
 	}
 }
 
-// normalizeOptional trims an optional string and turns a blank value into nil
-// so it is stored as NULL.
-func normalizeOptional(s *string) *string {
-	if s == nil {
-		return nil
-	}
-
-	trimmed := strings.TrimSpace(*s)
-
-	if trimmed == "" {
-		return nil
-	}
-
-	return &trimmed
-}
-
-func validateText(
-	field string,
-	value *string,
-) error {
-	if value == nil {
-		return nil
-	}
-
-	if strings.ContainsRune(*value, 0) {
-		return fmt.Errorf("%s must not contain null characters", field)
-	}
-
-	if utf8.RuneCountInString(*value) > maxTextLength {
-		return fmt.Errorf(
-			"%s must be at most %d characters",
-			field,
-			maxTextLength,
-		)
-	}
-
-	return nil
-}
-
 // normalizeAndValidate trims and normalizes the input in place, then checks
 // it against the database schema limits and the domain rules for year range,
 // VIN format and mileage.
 func (in *VehicleInput) normalizeAndValidate() error {
 	in.Make = strings.TrimSpace(in.Make)
 	in.Model = strings.TrimSpace(in.Model)
-	in.Trim = normalizeOptional(in.Trim)
-	in.Nickname = normalizeOptional(in.Nickname)
-	in.Vin = normalizeOptional(in.Vin)
+	in.Trim = validate.NormalizeOptional(in.Trim)
+	in.Nickname = validate.NormalizeOptional(in.Nickname)
+	in.Vin = validate.NormalizeOptional(in.Vin)
 
 	if in.Vin != nil {
 		upper := strings.ToUpper(*in.Vin)
@@ -296,7 +257,7 @@ func (in *VehicleInput) normalizeAndValidate() error {
 	}
 
 	for _, check := range textChecks {
-		err := validateText(check.field, check.value)
+		err := validate.Text(check.field, check.value, maxTextLength)
 
 		if err != nil {
 			return err
