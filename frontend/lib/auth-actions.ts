@@ -2,7 +2,7 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { SESSION_TOKEN_KEY } from "@/lib/auth";
+import { SESSION_TOKEN_KEY } from "@/lib/api";
 
 export async function logout() {
   const cookieStore = await cookies();
