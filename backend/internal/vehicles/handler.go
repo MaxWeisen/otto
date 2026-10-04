@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -15,6 +16,7 @@ import (
 
 const minVehicleYear = 1886
 const vinLength = 17
+const maxTextLength = 255
 
 type Handler struct {
 	service *Service
@@ -65,8 +67,18 @@ func (h *Handler) Create(
 
 	input.Make = strings.TrimSpace(input.Make)
 	input.Model = strings.TrimSpace(input.Model)
+	input.Trim = normalizeOptional(input.Trim)
+	input.Nickname = normalizeOptional(input.Nickname)
 
-	err = validateVehicle(input.Year, input.Make, input.Model, input.Vin)
+	err = validateVehicle(
+		input.Year,
+		input.Make,
+		input.Model,
+		input.Trim,
+		input.Vin,
+		input.Nickname,
+		input.Mileage,
+	)
 
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
@@ -126,8 +138,18 @@ func (h *Handler) Update(
 
 	input.Make = strings.TrimSpace(input.Make)
 	input.Model = strings.TrimSpace(input.Model)
+	input.Trim = normalizeOptional(input.Trim)
+	input.Nickname = normalizeOptional(input.Nickname)
 
-	err = validateVehicle(input.Year, input.Make, input.Model, input.Vin)
+	err = validateVehicle(
+		input.Year,
+		input.Make,
+		input.Model,
+		input.Trim,
+		input.Vin,
+		input.Nickname,
+		input.Mileage,
+	)
 
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
@@ -193,11 +215,45 @@ func writeServiceError(
 	}
 }
 
+// normalizeOptional trims an optional string and turns a blank value into nil
+// so it is stored as NULL.
+func normalizeOptional(s *string) *string {
+	if s == nil {
+		return nil
+	}
+
+	trimmed := strings.TrimSpace(*s)
+
+	if trimmed == "" {
+		return nil
+	}
+
+	return &trimmed
+}
+
+func validateMaxLength(
+	field string,
+	value *string,
+) error {
+	if value != nil && utf8.RuneCountInString(*value) > maxTextLength {
+		return fmt.Errorf(
+			"%s must be at most %d characters",
+			field,
+			maxTextLength,
+		)
+	}
+
+	return nil
+}
+
 func validateVehicle(
 	year int16,
 	vehicleMake string,
 	model string,
+	trim *string,
 	vin *string,
+	nickname *string,
+	mileage *int32,
 ) error {
 	maxYear := time.Now().Year() + 1
 
@@ -217,8 +273,30 @@ func validateVehicle(
 		return errors.New("model is required")
 	}
 
+	lengthChecks := []struct {
+		field string
+		value *string
+	}{
+		{"make", &vehicleMake},
+		{"model", &model},
+		{"trim", trim},
+		{"nickname", nickname},
+	}
+
+	for _, check := range lengthChecks {
+		err := validateMaxLength(check.field, check.value)
+
+		if err != nil {
+			return err
+		}
+	}
+
 	if vin != nil && len(*vin) != vinLength {
 		return fmt.Errorf("vin must be %d characters", vinLength)
+	}
+
+	if mileage != nil && *mileage < 0 {
+		return errors.New("mileage must not be negative")
 	}
 
 	return nil
