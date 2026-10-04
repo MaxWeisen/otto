@@ -18,6 +18,7 @@ import (
 	"github.com/maxweisen/otto/backend/internal/maintenance"
 	"github.com/maxweisen/otto/backend/internal/store"
 	"github.com/maxweisen/otto/backend/internal/vehicles"
+	"github.com/maxweisen/otto/backend/internal/vpic"
 )
 
 const sessionCookie = "otto_session_token=router-test"
@@ -192,6 +193,7 @@ func TestRouter(t *testing.T) {
 				auth.NewHandler(&config.Config{}, sessionDB{}),
 				vehicles.NewHandler(fakeVehicles{got: &got}),
 				maintenance.NewHandler(fakeRecords{got: &got}),
+				vpic.NewHandler(vpic.NewClient("")),
 			)
 
 			req := httptest.NewRequest(tt.method, tt.path, strings.NewReader(tt.body))

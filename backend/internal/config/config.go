@@ -8,12 +8,16 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// defaultVPICBaseURL is the public NHTSA vPIC API root.
+const defaultVPICBaseURL = "https://vpic.nhtsa.dot.gov/api"
+
 type Config struct {
 	CookieDomain string
 	DB           DatabaseConfig
 	FrontendURL  string
 	OAuth        OAuthConfig
 	Port         string
+	VPICBaseURL  string
 }
 
 type DatabaseConfig struct {
@@ -45,6 +49,7 @@ func Load() (*Config, error) {
 		},
 		CookieDomain: os.Getenv("COOKIE_DOMAIN"),
 		FrontendURL:  os.Getenv("FRONTEND_URL"),
+		VPICBaseURL:  getEnv("VPIC_BASE_URL", defaultVPICBaseURL),
 	}
 	return cfg, nil
 }
