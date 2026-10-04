@@ -15,3 +15,10 @@ sql:
           # Never serialize the session token hash.
           - column: "sessions.token"
             go_struct_tag: 'json:"-"'
+          # Read and write money exactly and serialize it as a decimal string.
+          - column: "maintenance_records.cost"
+            go_type:
+              import: "github.com/maxweisen/otto/backend/internal/money"
+              type: "Amount"
+              pointer: true
+            nullable: true

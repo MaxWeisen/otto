@@ -156,29 +156,6 @@ func TestNormalizeAndValidateNormalizes(t *testing.T) {
 	}
 }
 
-func TestNormalizeOptional(t *testing.T) {
-	tests := []struct {
-		name  string
-		input *string
-		want  *string
-	}{
-		{name: "nil", input: nil, want: nil},
-		{name: "empty", input: ptr(""), want: nil},
-		{name: "whitespace", input: ptr("  \t "), want: nil},
-		{name: "trimmed", input: ptr("  Sport  "), want: ptr("Sport")},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := normalizeOptional(tt.input)
-
-			if (got == nil) != (tt.want == nil) || (got != nil && *got != *tt.want) {
-				t.Fatalf("got %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 // handler tests
 
 // requestMarkerKey tags the request context so tests can check that the

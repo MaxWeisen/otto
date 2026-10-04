@@ -6,7 +6,20 @@ package store
 
 import (
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/maxweisen/otto/backend/internal/money"
 )
+
+type MaintenanceRecord struct {
+	ID          int64              `json:"id"`
+	VehicleID   int64              `json:"vehicle_id"`
+	Type        string             `json:"type"`
+	Description string             `json:"description"`
+	PerformedAt pgtype.Date        `json:"performed_at"`
+	Mileage     *int32             `json:"mileage"`
+	Cost        *money.Amount      `json:"cost"`
+	Notes       *string            `json:"notes"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
 
 type Session struct {
 	ID        int64              `json:"id"`
