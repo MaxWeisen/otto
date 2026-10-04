@@ -25,11 +25,8 @@ var vinPattern = regexp.MustCompile(
 	fmt.Sprintf("^[A-HJ-NPR-Z0-9]{%d}$", vinLength),
 )
 
-// now is the clock the year validation reads. Tests pin it to a fixed date.
 var now = time.Now
 
-// vehicleService is the subset of *Service the handler depends on, so tests
-// can substitute a fake.
 type vehicleService interface {
 	ListVehiclesByUser(ctx context.Context) ([]store.Vehicle, error)
 	CreateVehicle(ctx context.Context, params VehicleInput) (store.Vehicle, error)
