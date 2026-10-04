@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -15,6 +16,22 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/maxweisen/otto/backend/internal/store"
 )
+
+// fixedNow is the date the year validation sees in tests, so the allowed
+// year range does not shift while the tests run.
+var fixedNow = time.Date(2026, time.June, 15, 12, 0, 0, 0, time.UTC)
+
+// fixedMaxYear is the latest model year accepted at fixedNow.
+const fixedMaxYear = 2027
+
+func TestMain(m *testing.M) {
+	// Set before any test runs, so parallel tests only ever read it.
+	now = func() time.Time {
+		return fixedNow
+	}
+
+	os.Exit(m.Run())
+}
 
 func ptr[T any](v T) *T {
 	return &v
@@ -541,8 +558,7 @@ var idRoutes = []route{getRoute, updateRoute, deleteRoute}
 func TestHandlerRejectsInvalidBody(t *testing.T) {
 	t.Parallel()
 
-	maxYear := time.Now().Year() + 1
-	yearRangeErr := fmt.Sprintf("year must be between %d and %d", minVehicleYear, maxYear)
+	yearRangeErr := fmt.Sprintf("year must be between %d and %d", minVehicleYear, fixedMaxYear)
 	long := strings.Repeat("a", maxTextLength+1)
 
 	tests := []struct {
@@ -597,7 +613,7 @@ func TestHandlerRejectsInvalidBody(t *testing.T) {
 		},
 		{
 			name:    "year too new",
-			body:    fmt.Sprintf(`{"year":%d,"make":"Honda","model":"Civic"}`, maxYear+1),
+			body:    fmt.Sprintf(`{"year":%d,"make":"Honda","model":"Civic"}`, fixedMaxYear+1),
 			wantErr: yearRangeErr,
 		},
 		{
@@ -643,6 +659,31 @@ func TestHandlerRejectsInvalidBody(t *testing.T) {
 
 				assertError(t, rec, http.StatusBadRequest, tt.wantErr)
 				svc.assertNotCalled(t)
+			})
+		}
+	}
+}
+
+func TestHandlerAcceptsYearBounds(t *testing.T) {
+	t.Parallel()
+
+	years := []int16{minVehicleYear, fixedMaxYear}
+
+	for _, rt := range bodyRoutes {
+		for _, year := range years {
+			t.Run(fmt.Sprintf("%s/%d", rt.name, year), func(t *testing.T) {
+				t.Parallel()
+
+				svc := &fakeService{}
+				body := fmt.Sprintf(`{"year":%d,"make":"Honda","model":"Civic"}`, year)
+
+				serve(t, svc, rt.method, rt.target, body)
+
+				svc.assertCalled(t, rt.call)
+
+				if svc.gotInput.Year != year {
+					t.Fatalf("service year = %d, want %d", svc.gotInput.Year, year)
+				}
 			})
 		}
 	}

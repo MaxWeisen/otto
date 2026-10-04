@@ -20,6 +20,9 @@ const minVehicleYear = 1886
 const vinLength = 17
 const maxTextLength = 255
 
+// now is the clock the year validation reads. Tests pin it to a fixed date.
+var now = time.Now
+
 // vehicleService is the subset of *Service the handler depends on, so tests
 // can substitute a fake.
 type vehicleService interface {
@@ -260,7 +263,7 @@ func (in *VehicleInput) normalizeAndValidate() error {
 		in.Vin = &upper
 	}
 
-	maxYear := time.Now().Year() + 1
+	maxYear := now().Year() + 1
 
 	if int(in.Year) < minVehicleYear || int(in.Year) > maxYear {
 		return fmt.Errorf(
