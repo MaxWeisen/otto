@@ -1,10 +1,12 @@
 package vehicles
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -12,17 +14,38 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/maxweisen/otto/backend/internal/httpx"
+	"github.com/maxweisen/otto/backend/internal/store"
 )
 
 const minVehicleYear = 1886
 const vinLength = 17
 const maxTextLength = 255
 
-type Handler struct {
-	service *Service
+var vinPattern = regexp.MustCompile(
+	fmt.Sprintf("^[A-HJ-NPR-Z0-9]{%d}$", vinLength),
+)
+
+var now = time.Now
+
+type vehicleService interface {
+	ListVehiclesByUser(ctx context.Context) ([]store.Vehicle, error)
+	CreateVehicle(ctx context.Context, params VehicleInput) (store.Vehicle, error)
+	GetVehicle(ctx context.Context, id int64) (store.Vehicle, error)
+	UpdateVehicle(
+		ctx context.Context,
+		vehicleID int64,
+		params VehicleInput,
+	) (store.Vehicle, error)
+	DeleteVehicle(ctx context.Context, vehicleID int64) error
 }
 
-func NewHandler(s *Service) *Handler {
+var _ vehicleService = (*Service)(nil)
+
+type Handler struct {
+	service vehicleService
+}
+
+func NewHandler(s vehicleService) *Handler {
 	return &Handler{service: s}
 }
 
@@ -229,7 +252,8 @@ func validateText(
 }
 
 // normalizeAndValidate trims and normalizes the input in place, then checks
-// it against the rules enforced by the database schema.
+// it against the database schema limits and the domain rules for year range,
+// VIN format and mileage.
 func (in *VehicleInput) normalizeAndValidate() error {
 	in.Make = strings.TrimSpace(in.Make)
 	in.Model = strings.TrimSpace(in.Model)
@@ -242,7 +266,7 @@ func (in *VehicleInput) normalizeAndValidate() error {
 		in.Vin = &upper
 	}
 
-	maxYear := time.Now().Year() + 1
+	maxYear := now().Year() + 1
 
 	if int(in.Year) < minVehicleYear || int(in.Year) > maxYear {
 		return fmt.Errorf(
@@ -279,8 +303,11 @@ func (in *VehicleInput) normalizeAndValidate() error {
 		}
 	}
 
-	if in.Vin != nil && utf8.RuneCountInString(*in.Vin) != vinLength {
-		return fmt.Errorf("vin must be %d characters", vinLength)
+	if in.Vin != nil && !vinPattern.MatchString(*in.Vin) {
+		return fmt.Errorf(
+			"vin must be %d characters using letters and digits, excluding I, O and Q",
+			vinLength,
+		)
 	}
 
 	if in.Mileage != nil && *in.Mileage < 0 {
