@@ -39,6 +39,42 @@ jobs:
       - name: Test
         run: go test -race -count=1 ./...
 
+  backend-integration:
+    name: Backend integration (Go + Postgres)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: otto
+          POSTGRES_PASSWORD: otto
+          POSTGRES_DB: otto_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U otto -d otto_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      OTTO_TEST_DATABASE_URL: postgres://otto:otto@localhost:5432/otto_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Vet
+        run: go vet -tags integration ./...
+
+      - name: Integration test
+        run: go test -race -count=1 -tags integration ./...
+
   frontend:
     name: Frontend (Next.js)
     runs-on: ubuntu-latest
