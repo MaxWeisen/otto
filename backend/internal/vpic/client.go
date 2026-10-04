@@ -15,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/hashicorp/golang-lru/v2/expirable"
 )
 
 const (
@@ -45,8 +47,8 @@ type DecodedVIN struct {
 type Client struct {
 	baseURL     string
 	httpClient  *http.Client
-	modelsCache *ttlCache[[]string]
-	vinCache    *ttlCache[DecodedVIN]
+	modelsCache *expirable.LRU[string, []string]
+	vinCache    *expirable.LRU[string, DecodedVIN]
 }
 
 // NewClient returns a Client for the vPIC API rooted at baseURL.
@@ -54,8 +56,8 @@ func NewClient(baseURL string) *Client {
 	return &Client{
 		baseURL:     strings.TrimRight(baseURL, "/"),
 		httpClient:  &http.Client{Timeout: requestTimeout},
-		modelsCache: newTTLCache[[]string](cacheTTL, maxCacheEntries),
-		vinCache:    newTTLCache[DecodedVIN](cacheTTL, maxCacheEntries),
+		modelsCache: expirable.NewLRU[string, []string](maxCacheEntries, nil, cacheTTL),
+		vinCache:    expirable.NewLRU[string, DecodedVIN](maxCacheEntries, nil, cacheTTL),
 	}
 }
 
@@ -68,7 +70,7 @@ func (c *Client) ModelsForMakeYear(
 ) ([]string, error) {
 	key := strings.ToLower(makeName) + "|" + strconv.Itoa(year)
 
-	if models, ok := c.modelsCache.get(key); ok {
+	if models, ok := c.modelsCache.Get(key); ok {
 		return models, nil
 	}
 
@@ -112,7 +114,7 @@ func (c *Client) ModelsForMakeYear(
 		)
 	})
 
-	c.modelsCache.set(key, models)
+	c.modelsCache.Add(key, models)
 
 	return models, nil
 }
@@ -120,7 +122,7 @@ func (c *Client) ModelsForMakeYear(
 // DecodeVIN returns the year, make, model and trim vPIC decodes from vin, or
 // ErrVINNotFound when vPIC knows none of them.
 func (c *Client) DecodeVIN(ctx context.Context, vin string) (DecodedVIN, error) {
-	if decoded, ok := c.vinCache.get(vin); ok {
+	if decoded, ok := c.vinCache.Get(vin); ok {
 		return decoded, nil
 	}
 
@@ -154,7 +156,7 @@ func (c *Client) DecodeVIN(ctx context.Context, vin string) (DecodedVIN, error) 
 		return DecodedVIN{}, ErrVINNotFound
 	}
 
-	c.vinCache.set(vin, decoded)
+	c.vinCache.Add(vin, decoded)
 
 	return decoded, nil
 }
