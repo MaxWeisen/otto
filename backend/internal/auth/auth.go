@@ -310,7 +310,7 @@ func (h *Handler) SessionMiddleware(next http.Handler) http.Handler {
 
 		var user User
 		err = h.db.QueryRow(r.Context(),
-			`SELECT u.id, u.email, u.name, u.avatar_url
+			`SELECT u.id, u.email, COALESCE(u.name, ''), COALESCE(u.avatar_url, '')
 		FROM sessions s
 		JOIN users u ON u.id = s.user_id
 		WHERE s.token = $1 AND s.expires_at > now()
