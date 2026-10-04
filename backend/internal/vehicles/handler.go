@@ -65,20 +65,7 @@ func (h *Handler) Create(
 		return
 	}
 
-	input.Make = strings.TrimSpace(input.Make)
-	input.Model = strings.TrimSpace(input.Model)
-	input.Trim = normalizeOptional(input.Trim)
-	input.Nickname = normalizeOptional(input.Nickname)
-
-	err = validateVehicle(
-		input.Year,
-		input.Make,
-		input.Model,
-		input.Trim,
-		input.Vin,
-		input.Nickname,
-		input.Mileage,
-	)
+	err = input.normalizeAndValidate()
 
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
@@ -136,20 +123,7 @@ func (h *Handler) Update(
 		return
 	}
 
-	input.Make = strings.TrimSpace(input.Make)
-	input.Model = strings.TrimSpace(input.Model)
-	input.Trim = normalizeOptional(input.Trim)
-	input.Nickname = normalizeOptional(input.Nickname)
-
-	err = validateVehicle(
-		input.Year,
-		input.Make,
-		input.Model,
-		input.Trim,
-		input.Vin,
-		input.Nickname,
-		input.Mileage,
-	)
+	err = input.normalizeAndValidate()
 
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
@@ -231,11 +205,19 @@ func normalizeOptional(s *string) *string {
 	return &trimmed
 }
 
-func validateMaxLength(
+func validateText(
 	field string,
 	value *string,
 ) error {
-	if value != nil && utf8.RuneCountInString(*value) > maxTextLength {
+	if value == nil {
+		return nil
+	}
+
+	if strings.ContainsRune(*value, 0) {
+		return fmt.Errorf("%s must not contain null characters", field)
+	}
+
+	if utf8.RuneCountInString(*value) > maxTextLength {
 		return fmt.Errorf(
 			"%s must be at most %d characters",
 			field,
@@ -246,18 +228,23 @@ func validateMaxLength(
 	return nil
 }
 
-func validateVehicle(
-	year int16,
-	vehicleMake string,
-	model string,
-	trim *string,
-	vin *string,
-	nickname *string,
-	mileage *int32,
-) error {
+// normalizeAndValidate trims and normalizes the input in place, then checks
+// it against the rules enforced by the database schema.
+func (in *VehicleInput) normalizeAndValidate() error {
+	in.Make = strings.TrimSpace(in.Make)
+	in.Model = strings.TrimSpace(in.Model)
+	in.Trim = normalizeOptional(in.Trim)
+	in.Nickname = normalizeOptional(in.Nickname)
+	in.Vin = normalizeOptional(in.Vin)
+
+	if in.Vin != nil {
+		upper := strings.ToUpper(*in.Vin)
+		in.Vin = &upper
+	}
+
 	maxYear := time.Now().Year() + 1
 
-	if int(year) < minVehicleYear || int(year) > maxYear {
+	if int(in.Year) < minVehicleYear || int(in.Year) > maxYear {
 		return fmt.Errorf(
 			"year must be between %d and %d",
 			minVehicleYear,
@@ -265,37 +252,38 @@ func validateVehicle(
 		)
 	}
 
-	if vehicleMake == "" {
+	if in.Make == "" {
 		return errors.New("make is required")
 	}
 
-	if model == "" {
+	if in.Model == "" {
 		return errors.New("model is required")
 	}
 
-	lengthChecks := []struct {
+	textChecks := []struct {
 		field string
 		value *string
 	}{
-		{"make", &vehicleMake},
-		{"model", &model},
-		{"trim", trim},
-		{"nickname", nickname},
+		{"make", &in.Make},
+		{"model", &in.Model},
+		{"trim", in.Trim},
+		{"vin", in.Vin},
+		{"nickname", in.Nickname},
 	}
 
-	for _, check := range lengthChecks {
-		err := validateMaxLength(check.field, check.value)
+	for _, check := range textChecks {
+		err := validateText(check.field, check.value)
 
 		if err != nil {
 			return err
 		}
 	}
 
-	if vin != nil && len(*vin) != vinLength {
+	if in.Vin != nil && utf8.RuneCountInString(*in.Vin) != vinLength {
 		return fmt.Errorf("vin must be %d characters", vinLength)
 	}
 
-	if mileage != nil && *mileage < 0 {
+	if in.Mileage != nil && *in.Mileage < 0 {
 		return errors.New("mileage must not be negative")
 	}
 

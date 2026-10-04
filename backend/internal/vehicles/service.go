@@ -16,7 +16,7 @@ type Service struct {
 	queries *store.Queries
 }
 
-type CreateVehicleInput struct {
+type VehicleInput struct {
 	Year     int16   `json:"year"`
 	Make     string  `json:"make"`
 	Model    string  `json:"model"`
@@ -26,15 +26,9 @@ type CreateVehicleInput struct {
 	Mileage  *int32  `json:"mileage"`
 }
 
-type UpdateVehicleInput struct {
-	Year     int16   `json:"year"`
-	Make     string  `json:"make"`
-	Model    string  `json:"model"`
-	Trim     *string `json:"trim"`
-	Vin      *string `json:"vin"`
-	Nickname *string `json:"nickname"`
-	Mileage  *int32  `json:"mileage"`
-}
+type CreateVehicleInput = VehicleInput
+
+type UpdateVehicleInput = VehicleInput
 
 func NewService(q *store.Queries) *Service {
 	return &Service{
