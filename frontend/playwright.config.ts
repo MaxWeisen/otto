@@ -33,7 +33,6 @@ export default defineConfig({
       command: "node e2e/vpic-stub.mjs",
       url: `${vpicURL}/healthz`,
       env: { PORT: String(E2E_VPIC_PORT) },
-      reuseExistingServer: !process.env.CI,
     },
     {
       command: "go run ./cmd/otto",
@@ -47,14 +46,12 @@ export default defineConfig({
         VPIC_BASE_URL: `${vpicURL}/api`,
       },
       timeout: 120_000,
-      reuseExistingServer: !process.env.CI,
     },
     {
       command: `pnpm build && pnpm start -p ${E2E_FRONTEND_PORT}`,
       url: `${frontendURL}/login`,
       env: { NEXT_PUBLIC_API_URL: backendURL },
       timeout: 300_000,
-      reuseExistingServer: !process.env.CI,
     },
   ],
 });

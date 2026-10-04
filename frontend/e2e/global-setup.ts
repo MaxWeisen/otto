@@ -2,8 +2,12 @@ import { execFileSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { removeTestUser, withDb } from "./db";
-import { E2E_DATABASE_URL, E2E_GOOGLE_SUB, E2E_STORAGE_STATE } from "./env";
+import { removeStaleTestUsers, withDb } from "./db";
+import {
+  E2E_DATABASE_URL,
+  E2E_GOOGLE_SUB_PREFIX,
+  E2E_STORAGE_STATE,
+} from "./env";
 
 /**
  * Migrates the end-to-end database, creates a signed-in test user and saves
@@ -18,7 +22,10 @@ export default async function globalSetup() {
     { stdio: "inherit" },
   );
 
-  await removeTestUser();
+  await removeStaleTestUsers();
+
+  const googleSub = `${E2E_GOOGLE_SUB_PREFIX}${randomBytes(6).toString("hex")}`;
+  process.env.E2E_GOOGLE_SUB = googleSub;
 
   const token = randomBytes(32).toString("hex");
   const tokenHash = createHash("sha256").update(token).digest("hex");
@@ -28,7 +35,7 @@ export default async function globalSetup() {
       `INSERT INTO users (google_sub, email, name)
        VALUES ($1, 'e2e@example.invalid', 'E2E Tester')
        RETURNING id`,
-      [E2E_GOOGLE_SUB],
+      [googleSub],
     );
 
     await db.query(

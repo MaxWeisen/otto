@@ -1,5 +1,5 @@
 import { Client } from "pg";
-import { E2E_DATABASE_URL, E2E_GOOGLE_SUB } from "./env";
+import { E2E_DATABASE_URL, E2E_GOOGLE_SUB_PREFIX, e2eGoogleSub } from "./env";
 
 /**
  * Runs fn with a connection to the end-to-end database. It refuses any
@@ -31,19 +31,31 @@ export function clearVehicles(): Promise<void> {
     await db.query(
       `DELETE FROM vehicles
        WHERE user_id IN (SELECT id FROM users WHERE google_sub = $1)`,
-      [E2E_GOOGLE_SUB],
+      [e2eGoogleSub()],
     );
   });
 }
 
-/** Removes the test user along with its sessions and vehicles. */
+/** Removes this run's test user along with its sessions and vehicles. */
 export function removeTestUser(): Promise<void> {
+  return removeUsers("google_sub = $1", [e2eGoogleSub()]);
+}
+
+/** Removes test users that earlier, interrupted runs left behind. */
+export function removeStaleTestUsers(): Promise<void> {
+  return removeUsers(
+    "google_sub LIKE $1 AND created_at < now() - interval '1 day'",
+    [`${E2E_GOOGLE_SUB_PREFIX}%`],
+  );
+}
+
+function removeUsers(condition: string, params: string[]): Promise<void> {
   return withDb(async (db) => {
     await db.query(
       `DELETE FROM sessions
-       WHERE user_id IN (SELECT id FROM users WHERE google_sub = $1)`,
-      [E2E_GOOGLE_SUB],
+       WHERE user_id IN (SELECT id FROM users WHERE ${condition})`,
+      params,
     );
-    await db.query("DELETE FROM users WHERE google_sub = $1", [E2E_GOOGLE_SUB]);
+    await db.query(`DELETE FROM users WHERE ${condition}`, params);
   });
 }

@@ -10,5 +10,20 @@ export const E2E_DATABASE_URL =
 
 export const E2E_STORAGE_STATE = "e2e/.auth/user.json";
 
-/** The google_sub that marks the user these tests create and remove. */
-export const E2E_GOOGLE_SUB = "e2e-playwright-user";
+/** Marks the users end-to-end runs create, so leftovers can be found. */
+export const E2E_GOOGLE_SUB_PREFIX = "e2e-playwright-";
+
+/**
+ * The google_sub of this run's test user. Global setup picks a unique one per
+ * run, so runs from different checkouts can share otto_test, and the test
+ * workers inherit it through the environment.
+ */
+export function e2eGoogleSub(): string {
+  const sub = process.env.E2E_GOOGLE_SUB;
+
+  if (!sub) {
+    throw new Error("E2E_GOOGLE_SUB is not set; global setup did not run");
+  }
+
+  return sub;
+}

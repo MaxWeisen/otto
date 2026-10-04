@@ -47,6 +47,7 @@ pnpm test
 
 End-to-end tests use Playwright.
 They start a vPIC stub, the backend and a production build of the frontend on their own ports (4390, 3533 and 4200), so they can run next to the regular development servers.
+Set `E2E_VPIC_PORT`, `E2E_BACKEND_PORT` or `E2E_FRONTEND_PORT` to use other ports when those are taken.
 They need `goose` on the `PATH` to migrate the database, and Postgres with the `otto_test` database described above.
 `E2E_DATABASE_URL` defaults to the docker-compose `otto_test` database, and the tests refuse to run against any database other than `otto_test`.
 A signed-in test user is created directly in the database, so no Google sign-in is needed:
