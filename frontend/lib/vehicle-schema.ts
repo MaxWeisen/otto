@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-// These rules mirror the backend's validation in
-// backend/internal/vehicles/handler.go and the vehicles table schema.
+// These rules mirror the backend's validation in backend/internal/validate
+// and backend/internal/vehicles/handler.go, and the vehicles table schema.
 export const MIN_VEHICLE_YEAR = 1886;
 export const MAX_TEXT_LENGTH = 255;
 export const VIN_LENGTH = 17;

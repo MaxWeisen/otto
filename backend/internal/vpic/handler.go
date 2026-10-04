@@ -3,27 +3,16 @@ package vpic
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/maxweisen/otto/backend/internal/httpx"
-)
-
-// These limits match the vehicle validation in internal/vehicles.
-const minModelYear = 1886
-const vinLength = 17
-const maxMakeLength = 255
-
-var vinPattern = regexp.MustCompile(
-	fmt.Sprintf("^[A-HJ-NPR-Z0-9]{%d}$", vinLength),
+	"github.com/maxweisen/otto/backend/internal/validate"
 )
 
 var now = time.Now
@@ -97,15 +86,10 @@ func (h *Handler) Decode(
 ) {
 	vin := strings.ToUpper(strings.TrimSpace(chi.URLParam(r, "vin")))
 
-	if !vinPattern.MatchString(vin) {
-		httpx.WriteError(
-			w,
-			http.StatusBadRequest,
-			fmt.Sprintf(
-				"vin must be %d characters using letters and digits, excluding I, O and Q",
-				vinLength,
-			),
-		)
+	err := validate.VIN("vin", vin)
+
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -126,33 +110,18 @@ func validateMake(makeName string) error {
 		return errors.New("make is required")
 	}
 
-	if strings.ContainsRune(makeName, 0) {
-		return errors.New("make must not contain null characters")
-	}
-
-	if utf8.RuneCountInString(makeName) > maxMakeLength {
-		return fmt.Errorf("make must be at most %d characters", maxMakeLength)
-	}
-
-	return nil
+	return validate.Text("make", &makeName, validate.MaxTextLength)
 }
 
 func parseYear(raw string) (int, error) {
-	maxYear := now().Year() + 1
-	rangeErr := fmt.Errorf(
-		"year must be between %d and %d",
-		minModelYear,
-		maxYear,
-	)
+	// Atoi yields 0 or an out-of-range value for anything that is not a
+	// whole number, so ModelYear reports it like any other invalid year.
+	year, _ := strconv.Atoi(strings.TrimSpace(raw))
 
-	year, err := strconv.Atoi(strings.TrimSpace(raw))
+	err := validate.ModelYear("year", year, now())
 
 	if err != nil {
-		return 0, rangeErr
-	}
-
-	if year < minModelYear || year > maxYear {
-		return 0, rangeErr
+		return 0, err
 	}
 
 	return year, nil

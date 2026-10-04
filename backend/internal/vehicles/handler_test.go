@@ -17,6 +17,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/maxweisen/otto/backend/internal/store"
+	"github.com/maxweisen/otto/backend/internal/validate"
 )
 
 // fixedNow is the date the year validation sees in tests, so the allowed
@@ -44,8 +45,8 @@ func ptr[T any](v T) *T {
 }
 
 func TestNormalizeAndValidate(t *testing.T) {
-	long := strings.Repeat("a", maxTextLength+1)
-	maxRunes := strings.Repeat("é", maxTextLength)
+	long := strings.Repeat("a", validate.MaxTextLength+1)
+	maxRunes := strings.Repeat("é", validate.MaxTextLength)
 
 	tests := []struct {
 		name     string
@@ -71,7 +72,7 @@ func TestNormalizeAndValidate(t *testing.T) {
 		{name: "short vin", make: "Honda", model: "Civic", vin: ptr("ABC"), wantErr: vinErr},
 		{name: "lowercase vin", make: "Honda", model: "Civic", vin: ptr(" 1hgcm82633a004352 ")},
 		{name: "long vin", make: "Honda", model: "Civic", vin: ptr("1HGCM82633A0043521"), wantErr: vinErr},
-		{name: "multibyte vin", make: "Honda", model: "Civic", vin: ptr(strings.Repeat("é", vinLength)), wantErr: vinErr},
+		{name: "multibyte vin", make: "Honda", model: "Civic", vin: ptr(strings.Repeat("é", validate.VINLength)), wantErr: vinErr},
 		{name: "vin with I", make: "Honda", model: "Civic", vin: ptr("1HGCM82633I004352"), wantErr: vinErr},
 		{name: "vin with O", make: "Honda", model: "Civic", vin: ptr("1HGCM82633O004352"), wantErr: vinErr},
 		{name: "vin with Q", make: "Honda", model: "Civic", vin: ptr("1HGCM82633Q004352"), wantErr: vinErr},
@@ -547,8 +548,8 @@ var idRoutes = []route{getRoute, updateRoute, deleteRoute}
 func TestHandlerRejectsInvalidBody(t *testing.T) {
 	t.Parallel()
 
-	yearRangeErr := fmt.Sprintf("year must be between %d and %d", minVehicleYear, fixedMaxYear)
-	long := strings.Repeat("a", maxTextLength+1)
+	yearRangeErr := fmt.Sprintf("year must be between %d and %d", validate.MinModelYear, fixedMaxYear)
+	long := strings.Repeat("a", validate.MaxTextLength+1)
 
 	tests := []struct {
 		name    string
@@ -597,7 +598,7 @@ func TestHandlerRejectsInvalidBody(t *testing.T) {
 		},
 		{
 			name:    "year too old",
-			body:    fmt.Sprintf(`{"year":%d,"make":"Honda","model":"Civic"}`, minVehicleYear-1),
+			body:    fmt.Sprintf(`{"year":%d,"make":"Honda","model":"Civic"}`, validate.MinModelYear-1),
 			wantErr: yearRangeErr,
 		},
 		{
@@ -656,7 +657,7 @@ func TestHandlerRejectsInvalidBody(t *testing.T) {
 func TestHandlerAcceptsYearBounds(t *testing.T) {
 	t.Parallel()
 
-	years := []int16{minVehicleYear, fixedMaxYear}
+	years := []int16{validate.MinModelYear, fixedMaxYear}
 
 	for _, rt := range bodyRoutes {
 		for _, year := range years {
