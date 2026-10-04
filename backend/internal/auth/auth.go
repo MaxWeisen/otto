@@ -23,9 +23,7 @@ import (
 
 // types
 
-// DB is the subset of pgx that Handler needs. It is satisfied by both
-// *pgxpool.Pool and pgx.Tx, so tests can run the handler inside a
-// transaction that is rolled back afterwards.
+// DB is the subset of pgx that Handler needs.
 type DB interface {
 	Begin(ctx context.Context) (pgx.Tx, error)
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
