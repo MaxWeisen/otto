@@ -1,6 +1,7 @@
 package vehicles
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -12,17 +13,34 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/maxweisen/otto/backend/internal/httpx"
+	"github.com/maxweisen/otto/backend/internal/store"
 )
 
 const minVehicleYear = 1886
 const vinLength = 17
 const maxTextLength = 255
 
-type Handler struct {
-	service *Service
+// vehicleService is the subset of *Service the handler depends on, so tests
+// can substitute a fake.
+type vehicleService interface {
+	ListVehiclesByUser(ctx context.Context) ([]store.Vehicle, error)
+	CreateVehicle(ctx context.Context, params VehicleInput) (store.Vehicle, error)
+	GetVehicle(ctx context.Context, id int64) (store.Vehicle, error)
+	UpdateVehicle(
+		ctx context.Context,
+		vehicleID int64,
+		params VehicleInput,
+	) (store.Vehicle, error)
+	DeleteVehicle(ctx context.Context, vehicleID int64) error
 }
 
-func NewHandler(s *Service) *Handler {
+var _ vehicleService = (*Service)(nil)
+
+type Handler struct {
+	service vehicleService
+}
+
+func NewHandler(s vehicleService) *Handler {
 	return &Handler{service: s}
 }
 
