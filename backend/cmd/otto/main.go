@@ -13,6 +13,7 @@ import (
 	"github.com/maxweisen/otto/backend/internal/auth"
 	"github.com/maxweisen/otto/backend/internal/config"
 	"github.com/maxweisen/otto/backend/internal/httpx"
+	"github.com/maxweisen/otto/backend/internal/maintenance"
 	"github.com/maxweisen/otto/backend/internal/store"
 	"github.com/maxweisen/otto/backend/internal/vehicles"
 )
@@ -41,6 +42,8 @@ func main() {
 	queries := store.New(pool)
 	vehiclesService := vehicles.NewService(queries)
 	vehiclesHandler := vehicles.NewHandler(vehiclesService)
+	maintenanceService := maintenance.NewService(queries)
+	maintenanceHandler := maintenance.NewHandler(maintenanceService)
 
 	r := chi.NewRouter()
 
@@ -63,6 +66,10 @@ func main() {
 		r.Post("/auth/logout", authHandler.LogoutHandler)
 
 		r.With(auth.RequireAuth).Mount("/api/vehicles", vehiclesHandler.Routes())
+		r.With(auth.RequireAuth).Mount(
+			"/api/vehicles/{"+maintenance.VehicleIDParam+"}/maintenance",
+			maintenanceHandler.Routes(),
+		)
 	})
 
 	err = http.ListenAndServe(":"+cfg.Port, r)
