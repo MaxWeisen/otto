@@ -255,7 +255,8 @@ func validateText(
 }
 
 // normalizeAndValidate trims and normalizes the input in place, then checks
-// it against the rules enforced by the database schema.
+// it against the database schema limits and the domain rules for year range,
+// VIN format and mileage.
 func (in *VehicleInput) normalizeAndValidate() error {
 	in.Make = strings.TrimSpace(in.Make)
 	in.Model = strings.TrimSpace(in.Model)
