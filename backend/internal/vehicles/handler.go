@@ -56,7 +56,7 @@ func (h *Handler) Create(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
-	var input CreateVehicleInput
+	var input VehicleInput
 
 	err := httpx.DecodeJSON(w, r, &input)
 
@@ -114,7 +114,7 @@ func (h *Handler) Update(
 		return
 	}
 
-	var input UpdateVehicleInput
+	var input VehicleInput
 
 	err = httpx.DecodeJSON(w, r, &input)
 

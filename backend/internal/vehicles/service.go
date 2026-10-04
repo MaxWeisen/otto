@@ -26,10 +26,6 @@ type VehicleInput struct {
 	Mileage  *int32  `json:"mileage"`
 }
 
-type CreateVehicleInput = VehicleInput
-
-type UpdateVehicleInput = VehicleInput
-
 func NewService(q *store.Queries) *Service {
 	return &Service{
 		queries: q,
@@ -38,7 +34,7 @@ func NewService(q *store.Queries) *Service {
 
 func (s *Service) CreateVehicle(
 	ctx context.Context,
-	params CreateVehicleInput,
+	params VehicleInput,
 ) (store.Vehicle, error) {
 	user, ok := auth.UserFromContext(ctx)
 
@@ -111,7 +107,7 @@ func (s *Service) GetVehicle(
 func (s *Service) UpdateVehicle(
 	ctx context.Context,
 	vehicleID int64,
-	params UpdateVehicleInput,
+	params VehicleInput,
 ) (store.Vehicle, error) {
 	user, ok := auth.UserFromContext(ctx)
 
