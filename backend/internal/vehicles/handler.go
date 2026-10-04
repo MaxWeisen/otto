@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -19,6 +20,10 @@ import (
 const minVehicleYear = 1886
 const vinLength = 17
 const maxTextLength = 255
+
+var vinPattern = regexp.MustCompile(
+	fmt.Sprintf("^[A-HJ-NPR-Z0-9]{%d}$", vinLength),
+)
 
 // now is the clock the year validation reads. Tests pin it to a fixed date.
 var now = time.Now
@@ -300,8 +305,11 @@ func (in *VehicleInput) normalizeAndValidate() error {
 		}
 	}
 
-	if in.Vin != nil && utf8.RuneCountInString(*in.Vin) != vinLength {
-		return fmt.Errorf("vin must be %d characters", vinLength)
+	if in.Vin != nil && !vinPattern.MatchString(*in.Vin) {
+		return fmt.Errorf(
+			"vin must be %d characters using letters and digits, excluding I, O and Q",
+			vinLength,
+		)
 	}
 
 	if in.Mileage != nil && *in.Mileage < 0 {

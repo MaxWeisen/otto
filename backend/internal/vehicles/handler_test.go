@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -24,11 +26,15 @@ var fixedNow = time.Date(2026, time.June, 15, 12, 0, 0, 0, time.UTC)
 // fixedMaxYear is the latest model year accepted at fixedNow.
 const fixedMaxYear = 2027
 
+const vinErr = "vin must be 17 characters using letters and digits, excluding I, O and Q"
+
 func TestMain(m *testing.M) {
 	// Set before any test runs, so parallel tests only ever read it.
 	now = func() time.Time {
 		return fixedNow
 	}
+
+	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	os.Exit(m.Run())
 }
@@ -62,8 +68,14 @@ func TestNormalizeAndValidate(t *testing.T) {
 		{name: "negative mileage", make: "Honda", model: "Civic", mileage: ptr(int32(-1)), wantErr: "mileage must not be negative"},
 		{name: "valid vin", make: "Honda", model: "Civic", vin: ptr("1HGCM82633A004352")},
 		{name: "blank vin", make: "Honda", model: "Civic", vin: ptr("   ")},
-		{name: "short vin", make: "Honda", model: "Civic", vin: ptr("ABC"), wantErr: "vin must be 17 characters"},
-		{name: "multibyte vin", make: "Honda", model: "Civic", vin: ptr(strings.Repeat("é", vinLength))},
+		{name: "short vin", make: "Honda", model: "Civic", vin: ptr("ABC"), wantErr: vinErr},
+		{name: "lowercase vin", make: "Honda", model: "Civic", vin: ptr(" 1hgcm82633a004352 ")},
+		{name: "long vin", make: "Honda", model: "Civic", vin: ptr("1HGCM82633A0043521"), wantErr: vinErr},
+		{name: "multibyte vin", make: "Honda", model: "Civic", vin: ptr(strings.Repeat("é", vinLength)), wantErr: vinErr},
+		{name: "vin with I", make: "Honda", model: "Civic", vin: ptr("1HGCM82633I004352"), wantErr: vinErr},
+		{name: "vin with O", make: "Honda", model: "Civic", vin: ptr("1HGCM82633O004352"), wantErr: vinErr},
+		{name: "vin with Q", make: "Honda", model: "Civic", vin: ptr("1HGCM82633Q004352"), wantErr: vinErr},
+		{name: "vin with symbol", make: "Honda", model: "Civic", vin: ptr("1HGCM82633-004352"), wantErr: vinErr},
 		{name: "null in make", make: "Hon\x00da", model: "Civic", wantErr: "make must not contain null characters"},
 		{name: "null in model", make: "Honda", model: "Civ\x00ic", wantErr: "model must not contain null characters"},
 		{name: "null in trim", make: "Honda", model: "Civic", trim: ptr("Sp\x00ort"), wantErr: "trim must not contain null characters"},
@@ -272,11 +284,11 @@ func (f *fakeService) assertNotCalled(t *testing.T) {
 	}
 }
 
-// serve sends a request through the handler's router, mounted the same way
-// main.go does. The vehicles package never reads the user itself (the
-// service does), and auth only lets its session middleware store one, so the
-// stand-in middleware marks the request context instead and the fake checks
-// that this context reaches the service.
+// serve sends a request straight through the handler's router, without the
+// /vehicles prefix or the middleware main.go adds. The vehicles package never
+// reads the user itself (the service does), and auth only lets its session
+// middleware store one, so the stand-in middleware marks the request context
+// instead and the fake checks that this context reaches the service.
 func serve(
 	t *testing.T,
 	svc vehicleService,
@@ -634,12 +646,12 @@ func TestHandlerRejectsInvalidBody(t *testing.T) {
 		{
 			name:    "short vin",
 			body:    `{"year":2020,"make":"Honda","model":"Civic","vin":"ABC"}`,
-			wantErr: "vin must be 17 characters",
+			wantErr: vinErr,
 		},
 		{
 			name:    "long vin",
 			body:    `{"year":2020,"make":"Honda","model":"Civic","vin":"1HGCM82633A0043521"}`,
-			wantErr: "vin must be 17 characters",
+			wantErr: vinErr,
 		},
 		{
 			name:    "null byte",
