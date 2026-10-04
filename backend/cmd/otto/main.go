@@ -13,6 +13,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/maxweisen/otto/backend/internal/auth"
 	"github.com/maxweisen/otto/backend/internal/config"
+	"github.com/maxweisen/otto/backend/internal/store"
+	"github.com/maxweisen/otto/backend/internal/vehicles"
 )
 
 func main() {
@@ -36,6 +38,10 @@ func main() {
 
 	authHandler := auth.NewHandler(cfg, pool)
 
+	queries := store.New(pool)
+	vehiclesService := vehicles.NewService(queries)
+	vehiclesHandler := vehicles.NewHandler(vehiclesService)
+
 	r := chi.NewRouter()
 
 	// middlewares
@@ -55,6 +61,8 @@ func main() {
 
 		r.Get("/auth/me", authHandler.GetCurrentUser)
 		r.Post("/auth/logout", authHandler.LogoutHandler)
+
+		r.With(auth.RequireAuth).Mount("/api/vehicles", vehiclesHandler.Routes())
 	})
 
 	err = http.ListenAndServe(":"+cfg.Port, r)

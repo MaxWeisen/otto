@@ -16,17 +16,7 @@ type Service struct {
 	queries *store.Queries
 }
 
-type CreateVehicleInput struct {
-	Year     int16   `json:"year"`
-	Make     string  `json:"make"`
-	Model    string  `json:"model"`
-	Trim     *string `json:"trim"`
-	Vin      *string `json:"vin"`
-	Nickname *string `json:"nickname"`
-	Mileage  *int32  `json:"mileage"`
-}
-
-type UpdateVehicleInput struct {
+type VehicleInput struct {
 	Year     int16   `json:"year"`
 	Make     string  `json:"make"`
 	Model    string  `json:"model"`
@@ -44,7 +34,7 @@ func NewService(q *store.Queries) *Service {
 
 func (s *Service) CreateVehicle(
 	ctx context.Context,
-	params CreateVehicleInput,
+	params VehicleInput,
 ) (store.Vehicle, error) {
 	user, ok := auth.UserFromContext(ctx)
 
@@ -117,7 +107,7 @@ func (s *Service) GetVehicle(
 func (s *Service) UpdateVehicle(
 	ctx context.Context,
 	vehicleID int64,
-	params UpdateVehicleInput,
+	params VehicleInput,
 ) (store.Vehicle, error) {
 	user, ok := auth.UserFromContext(ctx)
 
