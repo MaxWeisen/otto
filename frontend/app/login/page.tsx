@@ -1,11 +1,17 @@
 import { Toast } from "@/components/toast";
 import { Button } from "@/components/ui/button";
+import { getCurrentUser } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
 export default async function LoginPage({
   searchParams,
 }: {
   searchParams: Promise<{ reason?: string }>;
 }) {
+  if (await getCurrentUser()) {
+    redirect("/vehicles");
+  }
+
   const { reason } = await searchParams;
   return (
     <main className="flex-1 flex flex-col items-center justify-center gap-2">

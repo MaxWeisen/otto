@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 export default async function LandingPage() {
   const user = await getCurrentUser();
   if (user) {
-    redirect("/home");
+    redirect("/vehicles");
   }
   return (
     <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
