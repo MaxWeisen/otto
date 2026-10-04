@@ -9,8 +9,10 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/maxweisen/otto/backend/internal/auth"
 	"github.com/maxweisen/otto/backend/internal/maintenance"
+	"github.com/maxweisen/otto/backend/internal/money"
 	"github.com/maxweisen/otto/backend/internal/store"
 	"github.com/maxweisen/otto/backend/internal/testutil"
 )
@@ -21,12 +23,12 @@ func TestServiceCRUD(t *testing.T) {
 	ctx, _ := userContext(t, tx)
 	vehicle := createVehicle(t, ctx, q)
 
-	created, err := svc.CreateRecord(ctx, vehicle.ID, maintenance.RecordInput{
+	created, err := svc.CreateRecord(ctx, vehicle.ID, maintenance.RecordParams{
 		Type:        "oil_change",
 		Description: "Synthetic 0W-20",
-		PerformedAt: "2026-05-01",
+		PerformedAt: date(t, "2026-05-01"),
 		Mileage:     new(int32(84000)),
-		Cost:        new("49.99"),
+		Cost:        amount(t, "49.99"),
 		Notes:       new("Replaced drain plug washer"),
 	})
 
@@ -40,10 +42,10 @@ func TestServiceCRUD(t *testing.T) {
 	}
 	assertDate(t, created, "2026-05-01")
 
-	minimal, err := svc.CreateRecord(ctx, vehicle.ID, maintenance.RecordInput{
+	minimal, err := svc.CreateRecord(ctx, vehicle.ID, maintenance.RecordParams{
 		Type:        "inspection",
 		Description: "State inspection",
-		PerformedAt: "2026-04-01",
+		PerformedAt: date(t, "2026-04-01"),
 	})
 
 	if err != nil {
@@ -69,11 +71,11 @@ func TestServiceCRUD(t *testing.T) {
 		t.Errorf("GetRecord = %+v, want %+v", got, created)
 	}
 
-	updated, err := svc.UpdateRecord(ctx, vehicle.ID, created.ID, maintenance.RecordInput{
+	updated, err := svc.UpdateRecord(ctx, vehicle.ID, created.ID, maintenance.RecordParams{
 		Type:        "repair",
 		Description: "Water pump",
-		PerformedAt: "2026-05-02",
-		Cost:        new("450"),
+		PerformedAt: date(t, "2026-05-02"),
+		Cost:        amount(t, "450"),
 	})
 
 	if err != nil {
@@ -131,8 +133,8 @@ func TestServiceStoresCostExactly(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		input := validInput()
-		input.Cost = new(tt.input)
+		input := validParams(t)
+		input.Cost = amount(t, tt.input)
 
 		created, err := svc.CreateRecord(ctx, vehicle.ID, input)
 
@@ -203,7 +205,7 @@ func TestServiceListEmptyAndMissingVehicle(t *testing.T) {
 		t.Errorf("ListRecords(missing) err = %v, want ErrVehicleNotFound", err)
 	}
 
-	_, err = svc.CreateRecord(ctx, missingID, validInput())
+	_, err = svc.CreateRecord(ctx, missingID, validParams(t))
 
 	if !errors.Is(err, maintenance.ErrVehicleNotFound) {
 		t.Errorf("CreateRecord(missing) err = %v, want ErrVehicleNotFound", err)
@@ -215,7 +217,7 @@ func TestServiceListEmptyAndMissingVehicle(t *testing.T) {
 		t.Errorf("GetRecord(missing) err = %v, want ErrRecordNotFound", err)
 	}
 
-	_, err = svc.UpdateRecord(ctx, vehicle.ID, missingID, validInput())
+	_, err = svc.UpdateRecord(ctx, vehicle.ID, missingID, validParams(t))
 
 	if !errors.Is(err, maintenance.ErrRecordNotFound) {
 		t.Errorf("UpdateRecord(missing) err = %v, want ErrRecordNotFound", err)
@@ -243,7 +245,7 @@ func TestServiceRecordMustBelongToVehicleInPath(t *testing.T) {
 		t.Errorf("GetRecord(other vehicle) err = %v, want ErrRecordNotFound", err)
 	}
 
-	_, err = svc.UpdateRecord(ctx, car.ID, record.ID, validInput())
+	_, err = svc.UpdateRecord(ctx, car.ID, record.ID, validParams(t))
 
 	if !errors.Is(err, maintenance.ErrRecordNotFound) {
 		t.Errorf("UpdateRecord(other vehicle) err = %v, want ErrRecordNotFound", err)
@@ -307,7 +309,7 @@ func TestServiceIsolatesUsers(t *testing.T) {
 
 	recordA := createRecord(t, ctxA, svc, vehicleA.ID, "2026-05-01")
 
-	_, err := svc.CreateRecord(ctxB, vehicleA.ID, validInput())
+	_, err := svc.CreateRecord(ctxB, vehicleA.ID, validParams(t))
 
 	if !errors.Is(err, maintenance.ErrVehicleNotFound) {
 		t.Errorf("B CreateRecord(A's vehicle) err = %v, want ErrVehicleNotFound", err)
@@ -327,10 +329,10 @@ func TestServiceIsolatesUsers(t *testing.T) {
 			t.Errorf("B GetRecord(%d, A's record) err = %v, want ErrRecordNotFound", vehicleID, err)
 		}
 
-		_, err = svc.UpdateRecord(ctxB, vehicleID, recordA.ID, maintenance.RecordInput{
+		_, err = svc.UpdateRecord(ctxB, vehicleID, recordA.ID, maintenance.RecordParams{
 			Type:        "other",
 			Description: "Hijacked",
-			PerformedAt: "2026-05-01",
+			PerformedAt: date(t, "2026-05-01"),
 		})
 
 		if !errors.Is(err, maintenance.ErrRecordNotFound) {
@@ -375,7 +377,7 @@ func TestServiceRequiresUser(t *testing.T) {
 		t.Errorf("ListRecords err = %v, want ErrUnauthorized", err)
 	}
 
-	_, err = svc.CreateRecord(ctx, 1, validInput())
+	_, err = svc.CreateRecord(ctx, 1, validParams(t))
 
 	if !errors.Is(err, maintenance.ErrUnauthorized) {
 		t.Errorf("CreateRecord err = %v, want ErrUnauthorized", err)
@@ -387,7 +389,7 @@ func TestServiceRequiresUser(t *testing.T) {
 		t.Errorf("GetRecord err = %v, want ErrUnauthorized", err)
 	}
 
-	_, err = svc.UpdateRecord(ctx, 1, 1, validInput())
+	_, err = svc.UpdateRecord(ctx, 1, 1, validParams(t))
 
 	if !errors.Is(err, maintenance.ErrUnauthorized) {
 		t.Errorf("UpdateRecord err = %v, want ErrUnauthorized", err)
@@ -400,12 +402,40 @@ func TestServiceRequiresUser(t *testing.T) {
 	}
 }
 
-func validInput() maintenance.RecordInput {
-	return maintenance.RecordInput{
+func validParams(t *testing.T) maintenance.RecordParams {
+	t.Helper()
+
+	return maintenance.RecordParams{
 		Type:        "tire_rotation",
 		Description: "Rotate and balance",
-		PerformedAt: "2026-05-01",
+		PerformedAt: date(t, "2026-05-01"),
 	}
+}
+
+// date returns the stored form of a YYYY-MM-DD date.
+func date(t *testing.T, value string) pgtype.Date {
+	t.Helper()
+
+	d, err := time.Parse(time.DateOnly, value)
+
+	if err != nil {
+		t.Fatalf("parse date %q: %v", value, err)
+	}
+
+	return pgtype.Date{Time: d, Valid: true}
+}
+
+// amount returns the exact amount for a decimal string such as "49.99".
+func amount(t *testing.T, value string) *money.Amount {
+	t.Helper()
+
+	a, err := money.Parse(value)
+
+	if err != nil {
+		t.Fatalf("parse amount %q: %v", value, err)
+	}
+
+	return &a
 }
 
 // userContext creates a user in tx and returns it with a context
@@ -447,18 +477,18 @@ func createVehicle(
 	return vehicle
 }
 
-// createRecord creates a record performed on date for vehicleID.
+// createRecord creates a record performed on performedAt for vehicleID.
 func createRecord(
 	t *testing.T,
 	ctx context.Context,
 	svc *maintenance.Service,
 	vehicleID int64,
-	date string,
+	performedAt string,
 ) store.MaintenanceRecord {
 	t.Helper()
 
-	input := validInput()
-	input.PerformedAt = date
+	input := validParams(t)
+	input.PerformedAt = date(t, performedAt)
 
 	record, err := svc.CreateRecord(ctx, vehicleID, input)
 

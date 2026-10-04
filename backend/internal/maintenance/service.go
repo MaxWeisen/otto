@@ -3,8 +3,6 @@ package maintenance
 import (
 	"context"
 	"errors"
-	"fmt"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -21,16 +19,15 @@ type Service struct {
 	queries *store.Queries
 }
 
-// RecordInput is the client-supplied content of a maintenance record.
-// PerformedAt is a YYYY-MM-DD date and Cost an exact decimal amount such as
-// "49.99", so money never passes through a float.
-type RecordInput struct {
-	Type        string  `json:"type"`
-	Description string  `json:"description"`
-	PerformedAt string  `json:"performed_at"`
-	Mileage     *int32  `json:"mileage"`
-	Cost        *string `json:"cost"`
-	Notes       *string `json:"notes"`
+// RecordParams is the validated content of a maintenance record, in the
+// types it is stored as.
+type RecordParams struct {
+	Type        string
+	Description string
+	PerformedAt pgtype.Date
+	Mileage     *int32
+	Cost        *money.Amount
+	Notes       *string
 }
 
 func NewService(q *store.Queries) *Service {
@@ -42,7 +39,7 @@ func NewService(q *store.Queries) *Service {
 func (s *Service) CreateRecord(
 	ctx context.Context,
 	vehicleID int64,
-	params RecordInput,
+	params RecordParams,
 ) (store.MaintenanceRecord, error) {
 	user, ok := auth.UserFromContext(ctx)
 
@@ -50,20 +47,14 @@ func (s *Service) CreateRecord(
 		return store.MaintenanceRecord{}, ErrUnauthorized
 	}
 
-	performedAt, cost, err := parseInput(params)
-
-	if err != nil {
-		return store.MaintenanceRecord{}, err
-	}
-
 	record, err := s.queries.CreateMaintenanceRecord(
 		ctx,
 		store.CreateMaintenanceRecordParams{
 			Type:        params.Type,
 			Description: params.Description,
-			PerformedAt: performedAt,
+			PerformedAt: params.PerformedAt,
 			Mileage:     params.Mileage,
-			Cost:        cost,
+			Cost:        params.Cost,
 			Notes:       params.Notes,
 			VehicleID:   vehicleID,
 			UserID:      user.Id,
@@ -158,7 +149,7 @@ func (s *Service) UpdateRecord(
 	ctx context.Context,
 	vehicleID int64,
 	recordID int64,
-	params RecordInput,
+	params RecordParams,
 ) (store.MaintenanceRecord, error) {
 	user, ok := auth.UserFromContext(ctx)
 
@@ -166,20 +157,14 @@ func (s *Service) UpdateRecord(
 		return store.MaintenanceRecord{}, ErrUnauthorized
 	}
 
-	performedAt, cost, err := parseInput(params)
-
-	if err != nil {
-		return store.MaintenanceRecord{}, err
-	}
-
 	record, err := s.queries.UpdateMaintenanceRecord(
 		ctx,
 		store.UpdateMaintenanceRecordParams{
 			Type:        params.Type,
 			Description: params.Description,
-			PerformedAt: performedAt,
+			PerformedAt: params.PerformedAt,
 			Mileage:     params.Mileage,
-			Cost:        cost,
+			Cost:        params.Cost,
 			Notes:       params.Notes,
 			ID:          recordID,
 			VehicleID:   vehicleID,
@@ -227,28 +212,4 @@ func (s *Service) DeleteRecord(
 	}
 
 	return nil
-}
-
-// parseInput converts the performed_at date and the optional cost of a
-// validated RecordInput into their database types.
-func parseInput(in RecordInput) (pgtype.Date, *money.Amount, error) {
-	t, err := time.Parse(time.DateOnly, in.PerformedAt)
-
-	if err != nil {
-		return pgtype.Date{}, nil, fmt.Errorf("parse performed_at: %w", err)
-	}
-
-	date := pgtype.Date{Time: t, Valid: true}
-
-	if in.Cost == nil {
-		return date, nil, nil
-	}
-
-	cost, err := money.Parse(*in.Cost)
-
-	if err != nil {
-		return pgtype.Date{}, nil, fmt.Errorf("parse cost: %w", err)
-	}
-
-	return date, &cost, nil
 }

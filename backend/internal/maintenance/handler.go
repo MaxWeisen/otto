@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/maxweisen/otto/backend/internal/httpx"
 	"github.com/maxweisen/otto/backend/internal/money"
 	"github.com/maxweisen/otto/backend/internal/store"
@@ -48,6 +49,18 @@ const maxUTCOffset = 14 * time.Hour
 
 var now = time.Now
 
+// RecordInput is the request body for creating or replacing a maintenance
+// record. PerformedAt is a YYYY-MM-DD date and Cost an exact decimal amount
+// such as "49.99", so money never passes through a float.
+type RecordInput struct {
+	Type        string  `json:"type"`
+	Description string  `json:"description"`
+	PerformedAt string  `json:"performed_at"`
+	Mileage     *int32  `json:"mileage"`
+	Cost        *string `json:"cost"`
+	Notes       *string `json:"notes"`
+}
+
 type recordService interface {
 	ListRecords(
 		ctx context.Context,
@@ -56,7 +69,7 @@ type recordService interface {
 	CreateRecord(
 		ctx context.Context,
 		vehicleID int64,
-		params RecordInput,
+		params RecordParams,
 	) (store.MaintenanceRecord, error)
 	GetRecord(
 		ctx context.Context,
@@ -67,7 +80,7 @@ type recordService interface {
 		ctx context.Context,
 		vehicleID int64,
 		recordID int64,
-		params RecordInput,
+		params RecordParams,
 	) (store.MaintenanceRecord, error)
 	DeleteRecord(ctx context.Context, vehicleID int64, recordID int64) error
 }
@@ -137,14 +150,14 @@ func (h *Handler) Create(
 		return
 	}
 
-	err = input.normalizeAndValidate()
+	params, err := input.normalizeAndValidate()
 
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	record, err := h.service.CreateRecord(r.Context(), vehicleID, input)
+	record, err := h.service.CreateRecord(r.Context(), vehicleID, params)
 
 	if err != nil {
 		writeServiceError(w, r, "unable to create maintenance record", err)
@@ -195,7 +208,7 @@ func (h *Handler) Update(
 		return
 	}
 
-	err = input.normalizeAndValidate()
+	params, err := input.normalizeAndValidate()
 
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
@@ -206,7 +219,7 @@ func (h *Handler) Update(
 		r.Context(),
 		vehicleID,
 		recordID,
-		input,
+		params,
 	)
 
 	if err != nil {
@@ -289,30 +302,30 @@ func writeServiceError(
 	}
 }
 
-// normalizeAndValidate trims and normalizes the input in place, then checks
-// it against the database schema limits and the domain rules for record
-// type, service date, mileage and cost. Cost is rewritten in canonical form
-// with exactly two decimal places, e.g. "007.5" becomes "7.50".
-func (in *RecordInput) normalizeAndValidate() error {
-	in.Type = strings.TrimSpace(in.Type)
-	in.Description = strings.TrimSpace(in.Description)
-	in.PerformedAt = strings.TrimSpace(in.PerformedAt)
-	in.Cost = validate.NormalizeOptional(in.Cost)
-	in.Notes = validate.NormalizeOptional(in.Notes)
-
-	if in.Type == "" {
-		return errors.New("type is required")
+// normalizeAndValidate trims and normalizes the input, checks it against
+// the database schema limits and the domain rules for record type, service
+// date, mileage and cost, and converts it into the stored types.
+func (in RecordInput) normalizeAndValidate() (RecordParams, error) {
+	params := RecordParams{
+		Type:        strings.TrimSpace(in.Type),
+		Description: strings.TrimSpace(in.Description),
+		Mileage:     in.Mileage,
+		Notes:       validate.NormalizeOptional(in.Notes),
 	}
 
-	if !slices.Contains(recordTypes, in.Type) {
-		return fmt.Errorf(
+	if params.Type == "" {
+		return RecordParams{}, errors.New("type is required")
+	}
+
+	if !slices.Contains(recordTypes, params.Type) {
+		return RecordParams{}, fmt.Errorf(
 			"type must be one of: %s",
 			strings.Join(recordTypes, ", "),
 		)
 	}
 
-	if in.Description == "" {
-		return errors.New("description is required")
+	if params.Description == "" {
+		return RecordParams{}, errors.New("description is required")
 	}
 
 	textChecks := []struct {
@@ -320,62 +333,56 @@ func (in *RecordInput) normalizeAndValidate() error {
 		value     *string
 		maxLength int
 	}{
-		{"description", &in.Description, maxDescriptionLength},
-		{"notes", in.Notes, maxNotesLength},
+		{"description", &params.Description, maxDescriptionLength},
+		{"notes", params.Notes, maxNotesLength},
 	}
 
 	for _, check := range textChecks {
 		err := validate.Text(check.field, check.value, check.maxLength)
 
 		if err != nil {
-			return err
+			return RecordParams{}, err
 		}
 	}
 
-	err := validatePerformedAt(in.PerformedAt)
+	performedAt, err := parsePerformedAt(strings.TrimSpace(in.PerformedAt))
 
 	if err != nil {
-		return err
+		return RecordParams{}, err
 	}
 
-	if in.Mileage != nil && *in.Mileage < 0 {
-		return errors.New("mileage must not be negative")
+	params.PerformedAt = pgtype.Date{Time: performedAt, Valid: true}
+
+	if params.Mileage != nil && *params.Mileage < 0 {
+		return RecordParams{}, errors.New("mileage must not be negative")
 	}
 
-	if in.Cost != nil {
-		cost, err := money.Parse(*in.Cost)
+	cost, err := parseCost(validate.NormalizeOptional(in.Cost))
 
-		if errors.Is(err, money.ErrNegative) {
-			return errors.New("cost must not be negative")
-		}
-
-		if err != nil {
-			return errors.New(
-				"cost must be a decimal amount with at most 8 digits before " +
-					"and 2 after the decimal point, e.g. \"49.99\"",
-			)
-		}
-
-		canonical := cost.String()
-		in.Cost = &canonical
+	if err != nil {
+		return RecordParams{}, err
 	}
 
-	return nil
+	params.Cost = cost
+
+	return params, nil
 }
 
-func validatePerformedAt(value string) error {
+// parsePerformedAt parses a YYYY-MM-DD service date and checks that it is
+// neither before minPerformedAt nor in the future.
+func parsePerformedAt(value string) (time.Time, error) {
 	if value == "" {
-		return errors.New("performed_at is required")
+		return time.Time{}, errors.New("performed_at is required")
 	}
 
 	date, err := time.Parse(time.DateOnly, value)
 
 	if err != nil {
-		return errors.New("performed_at must be a date in YYYY-MM-DD format")
+		return time.Time{}, errors.New("performed_at must be a date in YYYY-MM-DD format")
 	}
 
 	if date.Before(minPerformedAt) {
-		return fmt.Errorf(
+		return time.Time{}, fmt.Errorf(
 			"performed_at must not be before %s",
 			minPerformedAt.Format(time.DateOnly),
 		)
@@ -384,8 +391,31 @@ func validatePerformedAt(value string) error {
 	latest := now().UTC().Add(maxUTCOffset)
 
 	if date.After(latest) {
-		return errors.New("performed_at must not be in the future")
+		return time.Time{}, errors.New("performed_at must not be in the future")
 	}
 
-	return nil
+	return date, nil
+}
+
+// parseCost parses an optional decimal cost such as "49.99" into an exact
+// amount. A nil cost stays nil.
+func parseCost(value *string) (*money.Amount, error) {
+	if value == nil {
+		return nil, nil
+	}
+
+	cost, err := money.Parse(*value)
+
+	if errors.Is(err, money.ErrNegative) {
+		return nil, errors.New("cost must not be negative")
+	}
+
+	if err != nil {
+		return nil, errors.New(
+			"cost must be a decimal amount with at most 8 digits before " +
+				"and 2 after the decimal point, e.g. \"49.99\"",
+		)
+	}
+
+	return &cost, nil
 }

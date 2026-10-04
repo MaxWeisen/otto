@@ -58,6 +58,26 @@ func validInput() RecordInput {
 	}
 }
 
+// date returns the stored form of a YYYY-MM-DD date.
+func date(value string) pgtype.Date {
+	t, err := time.Parse(time.DateOnly, value)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return pgtype.Date{Time: t, Valid: true}
+}
+
+// validParams is validInput after validation.
+func validParams() RecordParams {
+	return RecordParams{
+		Type:        "oil_change",
+		Description: "Synthetic 0W-20",
+		PerformedAt: date("2026-05-01"),
+	}
+}
+
 func TestNormalizeAndValidate(t *testing.T) {
 	long := strings.Repeat("a", maxDescriptionLength+1)
 	maxRunes := strings.Repeat("é", maxDescriptionLength)
@@ -107,7 +127,7 @@ func TestNormalizeAndValidate(t *testing.T) {
 			input := validInput()
 			tt.modify(&input)
 
-			err := input.normalizeAndValidate()
+			_, err := input.normalizeAndValidate()
 
 			if tt.wantErr == "" {
 				if err != nil {
@@ -128,7 +148,7 @@ func TestNormalizeAndValidateAcceptsEveryType(t *testing.T) {
 		input := validInput()
 		input.Type = typ
 
-		err := input.normalizeAndValidate()
+		_, err := input.normalizeAndValidate()
 
 		if err != nil {
 			t.Fatalf("type %q: %v", typ, err)
@@ -141,37 +161,39 @@ func TestNormalizeAndValidateNormalizes(t *testing.T) {
 		Type:        " brakes ",
 		Description: "  Front pads ",
 		PerformedAt: " 2026-05-01 ",
+		Mileage:     ptr(int32(0)),
 		Cost:        ptr(" 120.5 "),
 		Notes:       ptr("   "),
 	}
 
-	err := input.normalizeAndValidate()
+	got, err := input.normalizeAndValidate()
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	want := RecordInput{
+	want := RecordParams{
 		Type:        "brakes",
 		Description: "Front pads",
-		PerformedAt: "2026-05-01",
-		Cost:        ptr("120.50"),
+		PerformedAt: date("2026-05-01"),
+		Mileage:     ptr(int32(0)),
+		Cost:        ptr(money.Amount(12050)),
 	}
 
-	if !reflect.DeepEqual(input, want) {
-		t.Fatalf("got %s, want %s", formatInput(input), formatInput(want))
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %s, want %s", formatParams(got), formatParams(want))
 	}
 
 	input.Cost = ptr("")
 
-	err = input.normalizeAndValidate()
+	got, err = input.normalizeAndValidate()
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if input.Cost != nil {
-		t.Fatalf("got cost %q, want nil", *input.Cost)
+	if got.Cost != nil {
+		t.Fatalf("got cost %v, want nil", *got.Cost)
 	}
 }
 
@@ -200,7 +222,7 @@ type fakeService struct {
 	gotCtx       context.Context
 	gotVehicleID int64
 	gotRecordID  int64
-	gotInput     RecordInput
+	gotParams    RecordParams
 }
 
 var _ recordService = (*fakeService)(nil)
@@ -223,10 +245,10 @@ func (f *fakeService) ListRecords(
 func (f *fakeService) CreateRecord(
 	ctx context.Context,
 	vehicleID int64,
-	params RecordInput,
+	params RecordParams,
 ) (store.MaintenanceRecord, error) {
 	f.capture(ctx, "CreateRecord", vehicleID)
-	f.gotInput = params
+	f.gotParams = params
 
 	return f.record, f.err
 }
@@ -246,11 +268,11 @@ func (f *fakeService) UpdateRecord(
 	ctx context.Context,
 	vehicleID int64,
 	recordID int64,
-	params RecordInput,
+	params RecordParams,
 ) (store.MaintenanceRecord, error) {
 	f.capture(ctx, "UpdateRecord", vehicleID)
 	f.gotRecordID = recordID
-	f.gotInput = params
+	f.gotParams = params
 
 	return f.record, f.err
 }
@@ -475,8 +497,8 @@ func TestHandlerCreate(t *testing.T) {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}
 
-	if !reflect.DeepEqual(svc.gotInput, validInput()) {
-		t.Fatalf("service input = %s, want %s", formatInput(svc.gotInput), formatInput(validInput()))
+	if !reflect.DeepEqual(svc.gotParams, validParams()) {
+		t.Fatalf("service params = %s, want %s", formatParams(svc.gotParams), formatParams(validParams()))
 	}
 }
 
@@ -521,8 +543,8 @@ func TestHandlerUpdate(t *testing.T) {
 		t.Fatalf("service record id = %d, want 42", svc.gotRecordID)
 	}
 
-	if !reflect.DeepEqual(svc.gotInput, validInput()) {
-		t.Fatalf("service input = %s, want %s", formatInput(svc.gotInput), formatInput(validInput()))
+	if !reflect.DeepEqual(svc.gotParams, validParams()) {
+		t.Fatalf("service params = %s, want %s", formatParams(svc.gotParams), formatParams(validParams()))
 	}
 }
 
@@ -726,19 +748,19 @@ func TestHandlerNormalizesBody(t *testing.T) {
 	tests := []struct {
 		name string
 		body string
-		want RecordInput
+		want RecordParams
 	}{
 		{
 			name: "trims and canonicalizes",
 			body: `{"type":" repair ","description":"  Water pump ",` +
 				`"performed_at":" 2026-05-01 ","mileage":0,` +
 				`"cost":" 0450.5 ","notes":" Under warranty "}`,
-			want: RecordInput{
+			want: RecordParams{
 				Type:        "repair",
 				Description: "Water pump",
-				PerformedAt: "2026-05-01",
+				PerformedAt: date("2026-05-01"),
 				Mileage:     ptr(int32(0)),
-				Cost:        ptr("450.50"),
+				Cost:        ptr(money.Amount(45050)),
 				Notes:       ptr("Under warranty"),
 			},
 		},
@@ -746,22 +768,22 @@ func TestHandlerNormalizesBody(t *testing.T) {
 			name: "blank optionals become nil",
 			body: `{"type":"oil_change","description":"Synthetic 0W-20",` +
 				`"performed_at":"2026-05-01","cost":"  ","notes":"\t"}`,
-			want: validInput(),
+			want: validParams(),
 		},
 		{
 			name: "null optionals stay nil",
 			body: `{"type":"oil_change","description":"Synthetic 0W-20",` +
 				`"performed_at":"2026-05-01","mileage":null,"cost":null,"notes":null}`,
-			want: validInput(),
+			want: validParams(),
 		},
 		{
 			name: "latest accepted date",
 			body: `{"type":"oil_change","description":"Synthetic 0W-20",` +
 				`"performed_at":"` + fixedLatestDate + `"}`,
-			want: RecordInput{
+			want: RecordParams{
 				Type:        "oil_change",
 				Description: "Synthetic 0W-20",
-				PerformedAt: fixedLatestDate,
+				PerformedAt: date(fixedLatestDate),
 			},
 		},
 	}
@@ -777,11 +799,11 @@ func TestHandlerNormalizesBody(t *testing.T) {
 
 				svc.assertCalled(t, rt.call)
 
-				if !reflect.DeepEqual(svc.gotInput, tt.want) {
+				if !reflect.DeepEqual(svc.gotParams, tt.want) {
 					t.Fatalf(
-						"service input = %s, want %s",
-						formatInput(svc.gotInput),
-						formatInput(tt.want),
+						"service params = %s, want %s",
+						formatParams(svc.gotParams),
+						formatParams(tt.want),
 					)
 				}
 			})
@@ -789,8 +811,8 @@ func TestHandlerNormalizesBody(t *testing.T) {
 	}
 }
 
-// formatInput renders an input with its pointer fields dereferenced.
-func formatInput(in RecordInput) string {
+// formatParams renders params with their pointer fields dereferenced.
+func formatParams(in RecordParams) string {
 	out, err := json.Marshal(in)
 
 	if err != nil {
