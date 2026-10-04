@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/maxweisen/otto/backend/internal/config"
+	"github.com/maxweisen/otto/backend/internal/httpx"
 )
 
 // types
@@ -98,7 +99,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 			"request_id",
 			middleware.GetReqID(r.Context()),
 		)
-		http.Error(w, "login cancelled", http.StatusBadRequest)
+		httpx.WriteError(w, http.StatusBadRequest, "login cancelled")
 		return
 	}
 	// Handle the exchange code to initiate a transport.
@@ -115,7 +116,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 			"request_id",
 			middleware.GetReqID(r.Context()),
 		)
-		http.Error(w, "bad request", http.StatusBadRequest)
+		httpx.WriteError(w, http.StatusBadRequest, "bad request")
 		return
 	}
 
@@ -138,7 +139,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 			"request_id",
 			middleware.GetReqID(r.Context()),
 		)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
@@ -152,7 +153,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 			"request_id",
 			middleware.GetReqID(r.Context()),
 		)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 	if res.StatusCode != http.StatusOK {
@@ -163,7 +164,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 			"request_id",
 			middleware.GetReqID(r.Context()),
 		)
-		http.Error(w, "failed to get user info", http.StatusInternalServerError)
+		httpx.WriteError(w, http.StatusInternalServerError, "failed to get user info")
 		return
 	}
 
@@ -178,7 +179,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 			"request_id",
 			middleware.GetReqID(r.Context()),
 		)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
@@ -200,7 +201,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 			"request_id",
 			middleware.GetReqID(r.Context()),
 		)
-		http.Error(w, "unable to create user", http.StatusInternalServerError)
+		httpx.WriteError(w, http.StatusInternalServerError, "unable to create user")
 		return
 	}
 
@@ -216,7 +217,7 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 			"request_id",
 			middleware.GetReqID(r.Context()),
 		)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 	defer tx.Rollback(r.Context())
@@ -234,10 +235,10 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 			"request_id",
 			middleware.GetReqID(r.Context()),
 		)
-		http.Error(
+		httpx.WriteError(
 			w,
-			"unable to delete previous session",
 			http.StatusInternalServerError,
+			"unable to delete previous session",
 		)
 		return
 	}
@@ -257,10 +258,10 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 			"request_id",
 			middleware.GetReqID(r.Context()),
 		)
-		http.Error(
+		httpx.WriteError(
 			w,
-			"unable to create session",
 			http.StatusInternalServerError,
+			"unable to create session",
 		)
 		return
 	}
@@ -275,10 +276,10 @@ func (h *Handler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 			"request_id",
 			middleware.GetReqID(r.Context()),
 		)
-		http.Error(
+		httpx.WriteError(
 			w,
-			"failed to create a session",
 			http.StatusInternalServerError,
+			"failed to create a session",
 		)
 		return
 	}
@@ -333,10 +334,10 @@ func RequireAuth(next http.Handler) http.Handler {
 		_, ok := UserFromContext(r.Context())
 
 		if !ok {
-			http.Error(
+			httpx.WriteError(
 				w,
-				"Unauthorized user. Please login and try again",
 				http.StatusUnauthorized,
+				"Unauthorized user. Please login and try again",
 			)
 			return
 		}
@@ -349,28 +350,20 @@ func (h *Handler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 	user, ok := UserFromContext(r.Context())
 
 	if !ok {
-		http.Error(
+		httpx.WriteError(
 			w,
-			"Unauthorized user. Please login and try again",
 			http.StatusUnauthorized,
+			"Unauthorized user. Please login and try again",
 		)
 		return
 	}
 
-	res, err := json.Marshal(map[string]string{
+	httpx.WriteJSON(w, http.StatusOK, map[string]string{
 		"name":      user.Name,
 		"id":        strconv.FormatInt(user.Id, 10),
 		"email":     user.Email,
 		"avatarUrl": user.AvatarUrl,
 	})
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(res)
 }
 
 func (h *Handler) LogoutHandler(w http.ResponseWriter, r *http.Request) {

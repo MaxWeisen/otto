@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"net/http"
 	"os"
@@ -13,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/maxweisen/otto/backend/internal/auth"
 	"github.com/maxweisen/otto/backend/internal/config"
+	"github.com/maxweisen/otto/backend/internal/httpx"
 	"github.com/maxweisen/otto/backend/internal/store"
 	"github.com/maxweisen/otto/backend/internal/vehicles"
 )
@@ -93,13 +93,5 @@ func requestLogger(next http.Handler) http.Handler {
 
 // route handlers
 func healthzHandler(w http.ResponseWriter, r *http.Request) {
-	res, err := json.Marshal(map[string]string{"status": "ok"})
-
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(res)
+	httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
