@@ -15,15 +15,26 @@ import (
 	"golang.org/x/oauth2/google"
 
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/maxweisen/otto/backend/internal/config"
 	"github.com/maxweisen/otto/backend/internal/httpx"
 )
 
 // types
+
+// DB is the subset of pgx that Handler needs. It is satisfied by both
+// *pgxpool.Pool and pgx.Tx, so tests can run the handler inside a
+// transaction that is rolled back afterwards.
+type DB interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
 type Handler struct {
 	oauthConfig  *oauth2.Config
-	db           *pgxpool.Pool
+	db           DB
 	cookieDomain string
 	frontendURL  string
 }
@@ -49,7 +60,7 @@ const userContextKey contextKey = "user"
 const sessionTokenKey string = "otto_session_token"
 
 // handlers
-func NewHandler(cfg *config.Config, db *pgxpool.Pool) *Handler {
+func NewHandler(cfg *config.Config, db DB) *Handler {
 	h := Handler{
 		oauthConfig: &oauth2.Config{
 			ClientID:     cfg.OAuth.ClientID,
@@ -323,7 +334,7 @@ func (h *Handler) SessionMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), userContextKey, &user)
+		ctx := ContextWithUser(r.Context(), &user)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -407,6 +418,12 @@ func (h *Handler) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 // helper funtions
 func isDev() bool {
 	return os.Getenv("ENV") == "development"
+}
+
+// ContextWithUser returns a copy of ctx carrying user, retrievable with
+// UserFromContext.
+func ContextWithUser(ctx context.Context, user *User) context.Context {
+	return context.WithValue(ctx, userContextKey, user)
 }
 
 func UserFromContext(ctx context.Context) (*User, bool) {
