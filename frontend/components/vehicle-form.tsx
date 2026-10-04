@@ -5,6 +5,7 @@ import { useActionState, useEffect, useState } from "react";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
 import {
+  ArrowClockwiseIcon,
   ArrowLeftIcon,
   ArrowRightIcon,
   CheckCircleIcon,
@@ -138,7 +139,7 @@ export function VehicleForm({
   // A model picked from the list no longer fits once the year or make
   // changes to one whose list does not include it.
   if (
-    modelsState.status === "ready" &&
+    modelOptions.length > 0 &&
     !modelOther &&
     values.model !== "" &&
     !modelOptions.includes(values.model)
@@ -190,7 +191,7 @@ export function VehicleForm({
     const listed = decoded.make ? findVehicleMake(decoded.make) : undefined;
     const makeName = listed ?? decoded.make;
     let model = decoded.model;
-    let isModelOther = false;
+    let isModelOther = true;
 
     if (listed && decoded.year && model) {
       try {
@@ -202,7 +203,7 @@ export function VehicleForm({
         model = match ?? model;
         isModelOther = !match;
       } catch {
-        // The model field falls back to free text when the list cannot load.
+        // The decoded model stays as free text when the list cannot load.
       }
     }
 
@@ -404,6 +405,10 @@ export function VehicleForm({
                 onSelect={selectModel}
                 onType={() => markEdited("model")}
                 onChange={(value) => setField("model", value)}
+                onFreeTextChange={(value) => {
+                  setModelOther(value !== "");
+                  setField("model", value);
+                }}
                 autoFocusOther={focusOther === "model"}
                 error={modelError}
               />
@@ -503,6 +508,7 @@ type ModelFieldProps = {
   onSelect: (value: string | null, typedText: string) => void;
   onType: () => void;
   onChange: (value: string) => void;
+  onFreeTextChange: (value: string) => void;
   autoFocusOther: boolean;
   error?: string;
 };
@@ -522,6 +528,7 @@ function ModelField({
   onSelect,
   onType,
   onChange,
+  onFreeTextChange,
   autoFocusOther,
   error,
 }: ModelFieldProps) {
@@ -566,7 +573,7 @@ function ModelField({
           id="vehicle-model-other"
           name="model"
           value={value}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={(event) => onFreeTextChange(event.target.value)}
           autoComplete="off"
           maxLength={MAX_TEXT_LENGTH}
           placeholder="e.g. Civic"
@@ -607,7 +614,25 @@ function ModelField({
           )}
         </>
       )}
-      {error ? (
+      {state.status === "error" ? (
+        <div className="flex items-center justify-between gap-2">
+          {error ? (
+            <FieldError id="vehicle-model-error">{error}</FieldError>
+          ) : (
+            <FieldDescription>{note}</FieldDescription>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            className="text-foreground"
+            onClick={state.retry}
+          >
+            <ArrowClockwiseIcon data-icon="inline-start" />
+            Retry
+          </Button>
+        </div>
+      ) : error ? (
         <FieldError id="vehicle-model-error">{error}</FieldError>
       ) : (
         note && <FieldDescription>{note}</FieldDescription>

@@ -34,11 +34,21 @@ export async function listVehicles(): Promise<Vehicle[]> {
 export async function createVehicle(
   input: VehicleInput,
 ): Promise<MutationResult<Vehicle>> {
-  const response = await apiFetch("/api/vehicles", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
+  let response: Response;
+
+  try {
+    response = await apiFetch("/api/vehicles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+  } catch {
+    return {
+      ok: false,
+      status: 502,
+      error: "Could not reach the server. Please try again.",
+    };
+  }
 
   if (!response.ok) {
     return {

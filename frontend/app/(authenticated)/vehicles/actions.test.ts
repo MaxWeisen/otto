@@ -139,6 +139,23 @@ describe("createVehicleAction", () => {
     expect(state.message).toBe("Something went wrong. Please try again.");
   });
 
+  it("explains when the backend cannot be reached", async () => {
+    server.use(
+      http.post(`${API_URL}/api/vehicles`, () => HttpResponse.error()),
+    );
+
+    const state = await createVehicleAction(
+      initialState,
+      formData(validFields),
+    );
+
+    expect(state).toEqual({
+      values: validFields,
+      message: "Could not reach the server. Please try again.",
+    });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
   it("sends signed-out visitors to the login page", async () => {
     server.use(
       http.post(`${API_URL}/api/vehicles`, () =>

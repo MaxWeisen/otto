@@ -51,6 +51,7 @@ const modelsByMakeYear: Record<string, string[]> = {
   "honda|2020": ["Accord", "Civic", "Pilot"],
   "honda|2018": ["Accord", "Civic"],
   "ford|2019": ["F-150", "Mustang"],
+  "mazda|2019": ["CX-5", "Mazda3"],
 };
 
 const decodedVins: Record<string, object> = {
@@ -66,6 +67,13 @@ const decodedVins: Record<string, object> = {
     year: 2006,
     make: "DMC",
     model: "DMC-12",
+    trim: null,
+  },
+  JM1BPACL0K1000001: {
+    vin: "JM1BPACL0K1000001",
+    year: null,
+    make: "MAZDA",
+    model: "Mazda3",
     trim: null,
   },
 };
@@ -395,6 +403,29 @@ describe("Model combobox", () => {
     expect(screen.getByRole("textbox", { name: "Model" })).toBeEnabled();
   });
 
+  it("keeps and submits a model typed when vPIC lists none", async () => {
+    const { user, action } = renderForm();
+
+    await user.type(yearInput(), "1901");
+    await chooseOption(user, makeInput(), "Ford", "Ford");
+    await screen.findByText(
+      "NHTSA lists no Ford models for 1901. Type the model instead.",
+    );
+
+    const model = screen.getByRole("textbox", { name: "Model" });
+
+    await user.type(model, "Model A");
+
+    expect(model).toHaveValue("Model A");
+
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.click(screen.getByRole("button", { name: "Add vehicle" }));
+
+    await waitFor(() => expect(action).toHaveBeenCalled());
+
+    expect(vi.mocked(action).mock.calls[0][1].get("model")).toBe("Model A");
+  });
+
   it("falls back to free text when the lookup fails", async () => {
     server.use(
       http.get("*/api/vpic/models", () =>
@@ -418,6 +449,78 @@ describe("Model combobox", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Model" })).toBeInTheDocument();
+  });
+
+  it("retries a failed lookup for the same make and year", async () => {
+    let failing = true;
+
+    server.use(
+      http.get("*/api/vpic/models", ({ request }) => {
+        modelRequests.push(new URL(request.url).search);
+
+        return failing
+          ? HttpResponse.json(
+              { error: "Vehicle data lookup is unavailable right now." },
+              { status: 502 },
+            )
+          : HttpResponse.json({ models: ["Forte", "Soul"] });
+      }),
+    );
+    const { user } = renderForm();
+
+    await user.type(yearInput(), "2014");
+    await chooseOption(user, makeInput(), "Kia", "Kia");
+    await screen.findByText(
+      "Couldn't load models from NHTSA. Type the model instead.",
+    );
+
+    failing = false;
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+
+    await waitFor(() => expect(modelCombobox()).toBeEnabled());
+    expect(modelRequests).toHaveLength(2);
+    expect(
+      screen.queryByRole("button", { name: "Retry" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(modelCombobox());
+
+    const options = await screen.findAllByRole("option");
+
+    expect(options.map((option) => option.textContent)).toEqual([
+      "Forte",
+      "Soul",
+      "Other / not listed",
+    ]);
+  });
+
+  it("keeps a typed model as Other once a retried lookup succeeds", async () => {
+    let failing = true;
+
+    server.use(
+      http.get("*/api/vpic/models", () =>
+        failing
+          ? HttpResponse.json({ error: "Unavailable." }, { status: 502 })
+          : HttpResponse.json({ models: ["Forte", "Soul"] }),
+      ),
+    );
+    const { user } = renderForm();
+
+    await user.type(yearInput(), "2013");
+    await chooseOption(user, makeInput(), "Kia", "Kia");
+    await user.type(
+      await screen.findByRole("textbox", { name: "Model" }),
+      "Rio",
+    );
+
+    failing = false;
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+
+    await waitFor(() => expect(modelCombobox()).toBeEnabled());
+    expect(modelCombobox()).toHaveValue("Other / not listed");
+    expect(screen.getByRole("textbox", { name: "Model name" })).toHaveValue(
+      "Rio",
+    );
   });
 
   it("offers Other for a model that is not listed", async () => {
@@ -526,6 +629,37 @@ describe("VIN decode", () => {
     expect(screen.getByRole("textbox", { name: "Model" })).toHaveValue(
       "DMC-12",
     );
+  });
+
+  it("keeps a decoded model as Other when the year is unknown", async () => {
+    const { user, action } = renderForm();
+
+    await user.type(vinInput(), "JM1BPACL0K1000001");
+    await user.click(screen.getByRole("button", { name: "Decode" }));
+
+    expect(await screen.findByText("Mazda Mazda3")).toBeInTheDocument();
+    expect(makeInput()).toHaveValue("Mazda");
+    expect(modelCombobox()).toHaveValue("Other / not listed");
+    expect(screen.getByRole("textbox", { name: "Model name" })).toHaveValue(
+      "Mazda3",
+    );
+
+    await user.type(yearInput(), "2019");
+    await waitFor(() => expect(modelRequests).toContain("mazda|2019"));
+    await waitFor(() => expect(modelCombobox()).toBeEnabled());
+
+    expect(screen.getByRole("textbox", { name: "Model name" })).toHaveValue(
+      "Mazda3",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.click(screen.getByRole("button", { name: "Add vehicle" }));
+
+    await waitFor(() => expect(action).toHaveBeenCalled());
+
+    expect(
+      Object.fromEntries(vi.mocked(action).mock.calls[0][1]),
+    ).toMatchObject({ year: "2019", make: "Mazda", model: "Mazda3" });
   });
 
   it.each([

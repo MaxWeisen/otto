@@ -11,7 +11,7 @@ export type VehicleModelsState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "ready"; models: readonly string[] }
-  | { status: "error"; message: string };
+  | { status: "error"; message: string; retry: () => void };
 
 /**
  * Loads the models NHTSA lists for a make and model year. Stays idle until
@@ -23,6 +23,7 @@ export function useVehicleModels(
 ): VehicleModelsState {
   const key = makeName && year ? modelsCacheKey(makeName, year) : null;
   const [failure, setFailure] = useState<{ key: string; message: string }>();
+  const [attempt, setAttempt] = useState(0);
   const [, setLoadedKey] = useState<string>();
 
   useEffect(() => {
@@ -43,7 +44,7 @@ export function useVehicleModels(
     );
 
     return () => controller.abort();
-  }, [makeName, year]);
+  }, [makeName, year, attempt]);
 
   if (!makeName || !year || !key) {
     return { status: "idle" };
@@ -56,7 +57,14 @@ export function useVehicleModels(
   }
 
   if (failure?.key === key) {
-    return { status: "error", message: failure.message };
+    return {
+      status: "error",
+      message: failure.message,
+      retry: () => {
+        setFailure(undefined);
+        setAttempt((current) => current + 1);
+      },
+    };
   }
 
   return { status: "loading" };

@@ -43,7 +43,7 @@ export async function readApiError(response: Response): Promise<string> {
 
 /**
  * Forwards a GET request to the otto API with the visitor's session cookie and
- * relays the response status and JSON body unchanged.
+ * relays the response status, content type and body unchanged.
  */
 export async function proxyApiGet(path: string): Promise<Response> {
   try {
@@ -51,7 +51,10 @@ export async function proxyApiGet(path: string): Promise<Response> {
 
     return new Response(await response.text(), {
       status: response.status,
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type":
+          response.headers.get("Content-Type") ?? "application/json",
+      },
     });
   } catch {
     return Response.json(
