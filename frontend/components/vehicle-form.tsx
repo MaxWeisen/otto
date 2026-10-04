@@ -192,10 +192,11 @@ export function VehicleForm({
     const makeName = listed ?? decoded.make;
     let model = decoded.model;
     let isModelOther = true;
+    const modelYear = decoded.year ?? lookupYear;
 
-    if (listed && decoded.year && model) {
+    if (listed && modelYear && model) {
       try {
-        const models = await loadVehicleModels(listed, decoded.year);
+        const models = await loadVehicleModels(listed, modelYear);
         const match = models.find(
           (option) => option.toLowerCase() === model?.toLowerCase(),
         );

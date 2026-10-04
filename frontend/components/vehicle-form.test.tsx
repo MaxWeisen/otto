@@ -52,6 +52,7 @@ const modelsByMakeYear: Record<string, string[]> = {
   "honda|2018": ["Accord", "Civic"],
   "ford|2019": ["F-150", "Mustang"],
   "mazda|2019": ["CX-5", "Mazda3"],
+  "mazda|2018": ["CX-5", "Mazda3"],
 };
 
 const decodedVins: Record<string, object> = {
@@ -660,6 +661,32 @@ describe("VIN decode", () => {
     expect(
       Object.fromEntries(vi.mocked(action).mock.calls[0][1]),
     ).toMatchObject({ year: "2019", make: "Mazda", model: "Mazda3" });
+  });
+
+  it("selects a decoded model listed for the entered year", async () => {
+    const { user, action } = renderForm();
+
+    await user.type(yearInput(), "2018");
+    await user.type(vinInput(), "JM1BPACL0K1000001");
+    await user.click(screen.getByRole("button", { name: "Decode" }));
+
+    expect(await screen.findByText("Mazda Mazda3")).toBeInTheDocument();
+    expect(modelRequests).toContain("mazda|2018");
+    expect(yearInput()).toHaveValue("2018");
+    expect(makeInput()).toHaveValue("Mazda");
+    await waitFor(() => expect(modelCombobox()).toHaveValue("Mazda3"));
+    expect(
+      screen.queryByRole("textbox", { name: "Model name" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.click(screen.getByRole("button", { name: "Add vehicle" }));
+
+    await waitFor(() => expect(action).toHaveBeenCalled());
+
+    expect(
+      Object.fromEntries(vi.mocked(action).mock.calls[0][1]),
+    ).toMatchObject({ year: "2018", make: "Mazda", model: "Mazda3" });
   });
 
   it.each([
