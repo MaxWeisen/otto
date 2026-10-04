@@ -43,7 +43,10 @@ export function useVehicleModels(
       },
     );
 
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      setFailure(undefined);
+    };
   }, [makeName, year, attempt]);
 
   if (!makeName || !year || !key) {
@@ -60,10 +63,7 @@ export function useVehicleModels(
     return {
       status: "error",
       message: failure.message,
-      retry: () => {
-        setFailure(undefined);
-        setAttempt((current) => current + 1);
-      },
+      retry: () => setAttempt((current) => current + 1),
     };
   }
 

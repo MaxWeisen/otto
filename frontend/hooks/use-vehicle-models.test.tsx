@@ -47,4 +47,33 @@ describe("useVehicleModels", () => {
     await waitFor(() => expect(result.current.status).toBe("error"));
     expect(sendBrowserToLogin).toHaveBeenCalledTimes(1);
   });
+
+  it("shows loading again when it returns to a make and year that failed", async () => {
+    let failing = true;
+    server.use(
+      http.get("*/api/vpic/models", () =>
+        failing
+          ? HttpResponse.json({ error: "Upstream failed." }, { status: 502 })
+          : HttpResponse.json({ models: ["Civic"] }),
+      ),
+    );
+
+    const { result, rerender } = renderHook(
+      ({ year }) => useVehicleModels("Honda", year),
+      { initialProps: { year: 1997 as number | null } },
+    );
+
+    await waitFor(() => expect(result.current.status).toBe("error"));
+
+    rerender({ year: null });
+    expect(result.current).toEqual({ status: "idle" });
+
+    failing = false;
+    rerender({ year: 1997 });
+
+    expect(result.current).toEqual({ status: "loading" });
+    await waitFor(() =>
+      expect(result.current).toEqual({ status: "ready", models: ["Civic"] }),
+    );
+  });
 });

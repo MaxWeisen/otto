@@ -47,6 +47,7 @@ import {
   type VehicleFormValues,
 } from "@/lib/vehicle-schema";
 import {
+  cachedVehicleModels,
   decodeVin,
   loadVehicleModels,
   type DecodedVin,
@@ -202,19 +203,12 @@ export function VehicleForm({
   ): Promise<string | null> {
     const listed = decoded.make ? findVehicleMake(decoded.make) : undefined;
     const makeName = listed ?? decoded.make;
-    let model = decoded.model;
-    let isModelOther = true;
     const modelYear = decoded.year ?? lookupYear;
+    let loadedModels: readonly string[] | undefined;
 
-    if (listed && modelYear && model) {
+    if (listed && modelYear && decoded.model) {
       try {
-        const models = await loadVehicleModels(listed, modelYear);
-        const match = models.find(
-          (option) => option.toLowerCase() === model?.toLowerCase(),
-        );
-
-        model = match ?? model;
-        isModelOther = !match;
+        loadedModels = await loadVehicleModels(listed, modelYear);
       } catch {
         // The decoded model stays as free text when the list cannot load.
       }
@@ -231,6 +225,26 @@ export function VehicleForm({
     if (decoded.year && unchanged("year")) {
       updates.year = String(decoded.year);
     }
+
+    // The model only counts as listed when it is in the list for the year
+    // that ends up in the form.
+    const formYear = updates.year ?? current.year;
+    const finalYear = validateVehicleFields({ ...current, year: formYear }, [
+      "year",
+    ])
+      ? null
+      : Number(formYear);
+    const yearModels =
+      finalYear === modelYear
+        ? loadedModels
+        : listed && finalYear
+          ? cachedVehicleModels(listed, finalYear)
+          : undefined;
+    const match = yearModels?.find(
+      (option) => option.toLowerCase() === decoded.model?.toLowerCase(),
+    );
+    const model = match ?? decoded.model;
+    const isModelOther = !match;
 
     if (makeName && unchanged("make")) {
       updates.make = makeName;
@@ -769,6 +783,12 @@ function VinField({
     }
   }
 
+  function changeVin(next: string) {
+    decodeRequest.current += 1;
+    onChange(next.replace(/\s/g, "").toUpperCase().slice(0, VIN_LENGTH));
+    setDecode({ status: "idle" });
+  }
+
   const decoding = decode.status === "decoding";
   const errorMessage = decode.status === "error" ? decode.message : error;
 
@@ -790,10 +810,18 @@ function VinField({
           id="vehicle-vin"
           name="vin"
           value={value}
-          onChange={(event) => {
-            decodeRequest.current += 1;
-            onChange(event.target.value);
-            setDecode({ status: "idle" });
+          onChange={(event) => changeVin(event.target.value)}
+          onPaste={(event) => {
+            const input = event.currentTarget;
+            const start = input.selectionStart ?? input.value.length;
+            const end = input.selectionEnd ?? start;
+
+            event.preventDefault();
+            changeVin(
+              input.value.slice(0, start) +
+                event.clipboardData.getData("text") +
+                input.value.slice(end),
+            );
           }}
           onKeyDown={(event) => {
             if (event.key === "Enter") {

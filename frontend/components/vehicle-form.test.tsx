@@ -56,6 +56,7 @@ const modelsByMakeYear: Record<string, string[]> = {
   "honda|2003": ["Accord", "Civic", "CR-V"],
   "honda|2020": ["Accord", "Civic", "Pilot"],
   "honda|2018": ["Accord", "Civic"],
+  "honda|2005": ["Civic", "Element"],
   "ford|2019": ["F-150", "Mustang"],
   "mazda|2019": ["CX-5", "Mazda3"],
   "mazda|2018": ["CX-5", "Mazda3"],
@@ -619,6 +620,29 @@ describe("VIN decode", () => {
     });
   });
 
+  it("keeps all 17 characters of a pasted VIN with stray spaces", async () => {
+    const { user } = renderForm();
+
+    await user.click(vinInput());
+    await user.paste(" 1hgcm82633a004352 ");
+
+    expect(vinInput()).toHaveValue("1HGCM82633A004352");
+
+    await user.click(screen.getByRole("button", { name: "Decode" }));
+
+    expect(
+      await screen.findByText("2003 Honda Accord EX-V6"),
+    ).toBeInTheDocument();
+  });
+
+  it("strips spaces and uppercases a typed VIN", async () => {
+    const { user } = renderForm();
+
+    await user.type(vinInput(), "1hgcm 8263");
+
+    expect(vinInput()).toHaveValue("1HGCM8263");
+  });
+
   it("decodes on Enter instead of moving to the next step", async () => {
     const { user } = renderForm();
 
@@ -847,6 +871,32 @@ describe("VIN decode", () => {
     expect(yearInput()).toHaveValue("2004");
     expect(makeInput()).toHaveValue("Honda");
     expect(screen.getByRole("textbox", { name: /^Trim/ })).toHaveValue("EX-V6");
+  });
+
+  it("keeps a decoded model missing from the edited year's list", async () => {
+    const response = Promise.withResolvers<void>();
+    server.use(
+      http.get("*/api/vpic/decode/:vin", async () => {
+        await response.promise;
+        return HttpResponse.json(decodedVins["1HGCM82633A004352"]);
+      }),
+    );
+    const { user } = renderForm();
+
+    await user.type(vinInput(), "1HGCM82633A004352");
+    await user.click(screen.getByRole("button", { name: "Decode" }));
+    await user.type(yearInput(), "2005");
+
+    response.resolve();
+
+    expect(await screen.findByText("Honda Accord EX-V6")).toBeInTheDocument();
+    await waitFor(() => expect(modelRequests).toContain("honda|2005"));
+    await waitFor(() => expect(modelCombobox()).toBeEnabled());
+    expect(yearInput()).toHaveValue("2005");
+    expect(modelCombobox()).toHaveValue("Other / not listed");
+    expect(screen.getByRole("textbox", { name: "Model name" })).toHaveValue(
+      "Accord",
+    );
   });
 
   it("shows the model list when a decode clears an Other model", async () => {
