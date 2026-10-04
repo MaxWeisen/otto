@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Combobox as ComboboxPrimitive } from "@base-ui/react";
 import {
   Combobox,
   ComboboxContent,
@@ -8,7 +9,6 @@ import {
   ComboboxItem,
   ComboboxList,
 } from "@/components/ui/combobox";
-import { filterOptions } from "@/lib/option-search";
 import { cn } from "@/lib/utils";
 
 /** The item that lets people type a value that is not in the list. */
@@ -47,12 +47,15 @@ export function OptionCombobox({
   describedBy,
 }: OptionComboboxProps) {
   const [query, setQuery] = useState("");
+  const { contains } = ComboboxPrimitive.useFilter({ value });
   const items = [...options, OTHER_OPTION];
 
   return (
     <Combobox
       items={items}
-      filteredItems={[...filterOptions(options, query), OTHER_OPTION]}
+      filter={(item: string, search, itemToString) =>
+        item === OTHER_OPTION || contains(item, search, itemToString)
+      }
       value={value}
       itemToStringLabel={(item: string) =>
         item === OTHER_OPTION ? otherLabel : item

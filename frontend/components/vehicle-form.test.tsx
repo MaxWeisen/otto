@@ -300,30 +300,38 @@ describe("VehicleForm wizard", () => {
 });
 
 describe("Make combobox", () => {
-  it("ranks matches and selects with the keyboard", async () => {
+  it("filters makes as you type and selects with the keyboard", async () => {
     const { user } = renderForm();
     const make = makeInput();
 
     await user.click(make);
-    await user.type(make, "m");
+    await user.type(make, "benz");
 
     const options = await screen.findAllByRole("option");
 
     expect(options.map((option) => option.textContent)).toEqual([
-      "Maserati",
-      "Mazda",
-      "McLaren",
       "Mercedes-Benz",
-      "Mercury",
-      "Mini",
-      "Mitsubishi",
-      "Aston Martin",
       "Other / not listed",
     ]);
 
-    await user.keyboard("{ArrowDown}{Enter}");
+    await user.clear(make);
+    await user.type(make, "maz{Enter}");
 
     expect(make).toHaveValue("Mazda");
+  });
+
+  it("keeps Other / not listed visible when nothing matches", async () => {
+    const { user } = renderForm();
+    const make = makeInput();
+
+    await user.click(make);
+    await user.type(make, "zzz");
+
+    const options = await screen.findAllByRole("option");
+
+    expect(options.map((option) => option.textContent)).toEqual([
+      "Other / not listed",
+    ]);
   });
 
   it("reveals a free-text make that keeps what was typed", async () => {
