@@ -789,9 +789,10 @@ describe("VIN decode", () => {
   });
 
   it("keeps fields edited while the decode was in flight", async () => {
+    const response = Promise.withResolvers<void>();
     server.use(
       http.get("*/api/vpic/decode/:vin", async () => {
-        await delay(100);
+        await response.promise;
         return HttpResponse.json(decodedVins["1HGCM82633A004352"]);
       }),
     );
@@ -802,15 +803,42 @@ describe("VIN decode", () => {
     await user.type(yearInput(), "2020");
     await chooseOption(user, makeInput(), "Toyota", "Toyota");
 
+    response.resolve();
+
     expect(
-      await screen.findByText("2003 Honda Accord EX-V6"),
+      await screen.findByText("No details were filled in from this VIN.", {
+        exact: false,
+      }),
     ).toBeInTheDocument();
+    expect(screen.queryByText(/Filled in/)).not.toBeInTheDocument();
     expect(yearInput()).toHaveValue("2020");
     expect(makeInput()).toHaveValue("Toyota");
     await waitFor(() => expect(modelCombobox()).toBeEnabled());
     expect(modelCombobox()).toHaveValue("");
-    expect(screen.getByRole("textbox", { name: /^Trim/ })).toHaveValue("EX-V6");
+    expect(screen.getByRole("textbox", { name: /^Trim/ })).toHaveValue("");
     expect(vinInput()).toHaveValue("1HGCM82633A004352");
+  });
+
+  it("summarizes only the decoded values it applied", async () => {
+    const response = Promise.withResolvers<void>();
+    server.use(
+      http.get("*/api/vpic/decode/:vin", async () => {
+        await response.promise;
+        return HttpResponse.json(decodedVins["1HGCM82633A004352"]);
+      }),
+    );
+    const { user } = renderForm();
+
+    await user.type(vinInput(), "1HGCM82633A004352");
+    await user.click(screen.getByRole("button", { name: "Decode" }));
+    await user.type(yearInput(), "2004");
+
+    response.resolve();
+
+    expect(await screen.findByText("Honda Accord EX-V6")).toBeInTheDocument();
+    expect(yearInput()).toHaveValue("2004");
+    expect(makeInput()).toHaveValue("Honda");
+    expect(screen.getByRole("textbox", { name: /^Trim/ })).toHaveValue("EX-V6");
   });
 
   it("shows the model list when a decode clears an Other model", async () => {

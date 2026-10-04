@@ -244,7 +244,7 @@ export function VehicleForm({
       setModelOther(nextModel !== "" && isModelOther);
     }
 
-    if (decoded.trim && unchanged("trim")) {
+    if (decoded.trim && unchanged("make") && unchanged("trim")) {
       updates.trim = decoded.trim;
     }
 
@@ -252,7 +252,7 @@ export function VehicleForm({
     setValues((latest) => ({ ...latest, ...updates }));
     markEdited(...(Object.keys(updates) as VehicleField[]));
 
-    return [decoded.year, makeName, model, decoded.trim]
+    return [updates.year, updates.make, updates.model, updates.trim]
       .filter(Boolean)
       .join(" ");
   }
@@ -833,13 +833,17 @@ function VinField({
         {decode.status === "decoded" && (
           <p className="flex items-start gap-1.5 text-xs/relaxed text-muted-foreground">
             <CheckCircleIcon className="mt-0.5 size-3.5 shrink-0 text-foreground" />
-            <span>
-              Filled in{" "}
-              <span className="font-medium text-foreground">
-                {decode.summary}
+            {decode.summary ? (
+              <span>
+                Filled in{" "}
+                <span className="font-medium text-foreground">
+                  {decode.summary}
+                </span>
+                . Check the details below and edit anything that is off.
               </span>
-              . Check the details below and edit anything that is off.
-            </span>
+            ) : (
+              <span>Decoded. No details were filled in from this VIN.</span>
+            )}
           </p>
         )}
       </div>

@@ -1,6 +1,5 @@
 import "server-only";
 import { cookies } from "next/headers";
-import { unstable_rethrow } from "next/navigation";
 import { cache } from "react";
 import { apiFetch, SESSION_TOKEN_KEY } from "@/lib/api";
 
@@ -12,8 +11,8 @@ export type User = {
 };
 
 /**
- * The signed-in visitor, or null when there is no valid session or the API
- * cannot be reached.
+ * The signed-in visitor, or null when there is no valid session. Throws when
+ * the API cannot be reached.
  */
 export const getCurrentUser = cache(async (): Promise<User | null> => {
   const sessionToken = (await cookies()).get(SESSION_TOKEN_KEY);
@@ -22,14 +21,7 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
     return null;
   }
 
-  let response: Response;
-
-  try {
-    response = await apiFetch("/auth/me", { onUnauthorized: "return" });
-  } catch (error) {
-    unstable_rethrow(error);
-    return null;
-  }
+  const response = await apiFetch("/auth/me", { onUnauthorized: "return" });
 
   if (!response.ok) {
     return null;

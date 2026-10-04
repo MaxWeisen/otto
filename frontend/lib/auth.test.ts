@@ -34,10 +34,10 @@ describe("getCurrentUser", () => {
     await expect(getCurrentUser()).resolves.toBeNull();
   });
 
-  it("returns null when the API cannot be reached", async () => {
+  it("throws when the API cannot be reached", async () => {
     cookieJar.set("otto_session_token", "session-123");
     server.use(http.get(`${API_URL}/auth/me`, () => HttpResponse.error()));
 
-    await expect(getCurrentUser()).resolves.toBeNull();
+    await expect(getCurrentUser()).rejects.toThrow();
   });
 });
