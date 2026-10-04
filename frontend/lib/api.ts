@@ -1,8 +1,22 @@
 import "server-only";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { LOGIN_URL } from "@/lib/login";
 import { capitalize } from "@/lib/utils";
 
 export const SESSION_TOKEN_KEY = "otto_session_token";
+
+export type ApiFetchInit = RequestInit & {
+  /**
+   * What a 401 response does: "redirect" (the default) sends the visitor to
+   * the login page, "return" hands the response back to the caller.
+   */
+  onUnauthorized?: "redirect" | "return";
+};
+
+export function redirectToLogin(): never {
+  redirect(LOGIN_URL);
+}
 
 /**
  * Calls the otto API, forwarding the visitor's session cookie so the backend
@@ -10,7 +24,7 @@ export const SESSION_TOKEN_KEY = "otto_session_token";
  */
 export async function apiFetch(
   path: string,
-  init: RequestInit = {},
+  { onUnauthorized = "redirect", ...init }: ApiFetchInit = {},
 ): Promise<Response> {
   const sessionToken = (await cookies()).get(SESSION_TOKEN_KEY);
   const headers = new Headers(init.headers);
@@ -19,11 +33,17 @@ export async function apiFetch(
     headers.set("Cookie", `${SESSION_TOKEN_KEY}=${sessionToken.value}`);
   }
 
-  return fetch(`${process.env.NEXT_PUBLIC_API_URL}${path}`, {
+  const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${path}`, {
     ...init,
     headers,
     cache: "no-store",
   });
+
+  if (response.status === 401 && onUnauthorized === "redirect") {
+    redirectToLogin();
+  }
+
+  return response;
 }
 
 /** Reads the message from an API error response of the form {"error": "..."}. */
@@ -43,11 +63,12 @@ export async function readApiError(response: Response): Promise<string> {
 
 /**
  * Forwards a GET request to the otto API with the visitor's session cookie and
- * relays the response status, content type and body unchanged.
+ * relays the response status, content type and body unchanged, including a
+ * 401 for the browser to act on.
  */
 export async function proxyApiGet(path: string): Promise<Response> {
   try {
-    const response = await apiFetch(path);
+    const response = await apiFetch(path, { onUnauthorized: "return" });
 
     return new Response(await response.text(), {
       status: response.status,

@@ -13,7 +13,13 @@ import {
 import type { VehicleFormState } from "@/app/(authenticated)/vehicles/actions";
 import { Toaster } from "@/components/ui/sonner";
 import { VehicleForm } from "@/components/vehicle-form";
+import { sendBrowserToLogin } from "@/lib/login";
 import { server } from "@/test/server";
+
+vi.mock("@/lib/login", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/login")>()),
+  sendBrowserToLogin: vi.fn(),
+}));
 
 // Pin the clock so the latest accepted model year (next year) is stable.
 beforeAll(() => {
@@ -715,6 +721,21 @@ describe("VIN decode", () => {
 
     expect(status).toBeInTheDocument();
     expect(vinInput()).toHaveAttribute("aria-invalid", "true");
+    expect(yearInput()).toHaveValue("");
+  });
+
+  it("sends a signed-out visitor to the login page", async () => {
+    server.use(
+      http.get("*/api/vpic/decode/:vin", () =>
+        HttpResponse.json({ error: "Unauthorized." }, { status: 401 }),
+      ),
+    );
+    const { user } = renderForm();
+
+    await user.type(vinInput(), "1HGCM82633A004352");
+    await user.click(screen.getByRole("button", { name: "Decode" }));
+
+    await waitFor(() => expect(sendBrowserToLogin).toHaveBeenCalledTimes(1));
     expect(yearInput()).toHaveValue("");
   });
 

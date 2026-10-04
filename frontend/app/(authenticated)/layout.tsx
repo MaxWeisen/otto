@@ -1,6 +1,6 @@
 import { AppBar } from "@/components/app-bar";
+import { redirectToLogin } from "@/lib/api";
 import { getCurrentUser } from "@/lib/auth";
-import { redirect } from "next/navigation";
 
 export default async function AuthenticatedLayout({
   children,
@@ -10,7 +10,7 @@ export default async function AuthenticatedLayout({
   const user = await getCurrentUser();
 
   if (!user) {
-    redirect("/login?reason=unauthorized");
+    redirectToLogin();
   }
   return (
     <>

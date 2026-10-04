@@ -1,6 +1,6 @@
 import "server-only";
+import { unstable_rethrow } from "next/navigation";
 import { apiFetch, readApiError } from "@/lib/api";
-import { redirectToLogin } from "@/lib/auth";
 import type { VehicleInput } from "@/lib/vehicle-schema";
 
 export type Vehicle = {
@@ -20,10 +20,6 @@ export type MutationResult<T> =
 export async function listVehicles(): Promise<Vehicle[]> {
   const response = await apiFetch("/api/vehicles");
 
-  if (response.status === 401) {
-    redirectToLogin();
-  }
-
   if (!response.ok) {
     throw new Error(await readApiError(response));
   }
@@ -42,7 +38,9 @@ export async function createVehicle(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
     });
-  } catch {
+  } catch (error) {
+    unstable_rethrow(error);
+
     return {
       ok: false,
       status: 502,

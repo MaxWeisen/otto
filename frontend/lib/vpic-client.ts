@@ -1,6 +1,7 @@
 // Browser-side helpers for the NHTSA vPIC lookups, called through the
 // app/api/vpic route handlers so the session cookie reaches the backend.
 
+import { sendBrowserToLogin } from "@/lib/login";
 import { capitalize } from "@/lib/utils";
 
 export type DecodedVin = {
@@ -10,8 +11,6 @@ export type DecodedVin = {
   model: string | null;
   trim: string | null;
 };
-
-export class VpicError extends Error {}
 
 async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   let response: Response;
@@ -23,7 +22,12 @@ async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
       throw error;
     }
 
-    throw new VpicError("Could not reach the server. Please try again.");
+    throw new Error("Could not reach the server. Please try again.");
+  }
+
+  if (response.status === 401) {
+    sendBrowserToLogin();
+    throw new Error("Your session has expired. Please sign in again.");
   }
 
   const body = await response.json().catch(() => null);
@@ -34,7 +38,7 @@ async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
         ? capitalize(body.error)
         : "Something went wrong. Please try again.";
 
-    throw new VpicError(message);
+    throw new Error(message);
   }
 
   return body as T;

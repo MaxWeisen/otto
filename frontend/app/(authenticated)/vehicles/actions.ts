@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { redirectToLogin } from "@/lib/auth";
 import {
   readVehicleFormValues,
   validateVehicleForm,
@@ -31,10 +30,6 @@ export async function createVehicleAction(
   const result = await createVehicle(validation.data);
 
   if (!result.ok) {
-    if (result.status === 401) {
-      redirectToLogin();
-    }
-
     return { values, message: result.error };
   }
 

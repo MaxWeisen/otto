@@ -1,6 +1,5 @@
 import "server-only";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { cache } from "react";
 import { apiFetch, SESSION_TOKEN_KEY } from "@/lib/api";
 
@@ -18,7 +17,7 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
     return null;
   }
 
-  const response = await apiFetch("/auth/me");
+  const response = await apiFetch("/auth/me", { onUnauthorized: "return" });
 
   if (!response.ok) {
     return null;
@@ -28,7 +27,3 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
 
   return user as User;
 });
-
-export function redirectToLogin(): never {
-  redirect("/login?reason=unauthorized");
-}

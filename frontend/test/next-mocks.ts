@@ -27,6 +27,11 @@ export const navigationModule = {
   redirect: (url: string): never => {
     throw new RedirectError(url);
   },
+  unstable_rethrow: (error: unknown) => {
+    if (error instanceof RedirectError) {
+      throw error;
+    }
+  },
   useRouter: () => router,
   usePathname: () => "/vehicles",
   useSearchParams: () => new URLSearchParams(),
