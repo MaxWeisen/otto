@@ -27,3 +27,39 @@ cd backend
 OTTO_TEST_DATABASE_URL='postgres://dev_user:dev_password@localhost:5532/otto_test?sslmode=disable' \
   go test -race -count=1 -tags integration ./...
 ```
+
+### Vehicle data lookup
+
+The backend proxies NHTSA's public [vPIC API](https://vpic.nhtsa.dot.gov/api/) under `/api/vpic` for model lists and VIN decoding, for signed-in users only:
+
+- `GET /api/vpic/models?make=<make>&year=<year>` returns the sorted model names for a make and model year as `{"models": [...]}`.
+- `GET /api/vpic/decode/<vin>` returns the `vin`, `year`, `make`, `model` and `trim` decoded from a 17-character VIN, with `null` for fields vPIC has no data for, or 404 when vPIC knows nothing about the VIN.
+
+Inputs are validated with the same rules as vehicles, and an unreachable or failing vPIC answers 502.
+Upstream requests time out after 5 seconds, and answers are cached in memory for 24 hours in LRU caches of up to 1000 entries each.
+Set `VPIC_BASE_URL` to point it at another vPIC-compatible server; it defaults to `https://vpic.nhtsa.dot.gov/api`.
+
+## Frontend
+
+### Running tests
+
+Unit and component tests use Vitest and need no running services:
+
+```sh
+cd frontend
+pnpm test
+```
+
+End-to-end tests use Playwright.
+They start a vPIC stub, the backend and a production build of the frontend on their own ports (4390, 3533 and 4200), so they can run next to the regular development servers.
+Set `E2E_VPIC_PORT`, `E2E_BACKEND_PORT` or `E2E_FRONTEND_PORT` to use other ports when those are taken.
+They need Go to run the backend, `goose` on the `PATH` to migrate the database, and Postgres with the `otto_test` database described above.
+`E2E_DATABASE_URL` defaults to the docker-compose `otto_test` database, and the tests refuse to run against any database other than `otto_test`.
+A signed-in test user is created directly in the database, so no Google sign-in is needed:
+
+```sh
+docker compose up -d db
+cd frontend
+pnpm exec playwright install chromium
+pnpm test:e2e
+```

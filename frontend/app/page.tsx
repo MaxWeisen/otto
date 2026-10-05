@@ -1,12 +1,19 @@
 import { Button } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 
 export default async function LandingPage() {
-  const user = await getCurrentUser();
+  let user = null;
+
+  try {
+    user = await getCurrentUser();
+  } catch (error) {
+    unstable_rethrow(error);
+  }
+
   if (user) {
-    redirect("/home");
+    redirect("/vehicles");
   }
   return (
     <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">

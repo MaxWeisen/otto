@@ -16,9 +16,15 @@ Open [http://localhost:4000](http://localhost:4000) with your browser to see the
 
 ## Environment
 
-- `NEXT_PUBLIC_API_URL` - base URL of the backend API, used for sign-in, session lookup, and logout.
+- `NEXT_PUBLIC_API_URL` - base URL of the backend API, used for sign-in, logout and every server-side API call, including the vehicles pages and the `/api/vpic` route handlers that proxy vehicle data lookups.
+  A 401 from the backend sends the visitor to the login page.
 - `COOKIE_DOMAIN` - optional; set it to the same value as the backend's `COOKIE_DOMAIN` so logout clears the `otto_session_token` cookie on that domain.
   Leave it unset when the backend does not set a cookie domain.
+
+## Testing
+
+Run `pnpm test` for the Vitest unit and component tests, `pnpm test:watch` to rerun them on change, or `pnpm test:e2e` for the Playwright end-to-end tests.
+See the [root README](../README.md#frontend) for what the end-to-end tests need.
 
 ## Formatting
 

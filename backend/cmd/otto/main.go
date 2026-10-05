@@ -16,6 +16,7 @@ import (
 	"github.com/maxweisen/otto/backend/internal/maintenance"
 	"github.com/maxweisen/otto/backend/internal/store"
 	"github.com/maxweisen/otto/backend/internal/vehicles"
+	"github.com/maxweisen/otto/backend/internal/vpic"
 )
 
 func main() {
@@ -45,7 +46,9 @@ func main() {
 	maintenanceService := maintenance.NewService(queries)
 	maintenanceHandler := maintenance.NewHandler(maintenanceService)
 
-	r := newRouter(authHandler, vehiclesHandler, maintenanceHandler)
+	vpicHandler := vpic.NewHandler(vpic.NewClient(cfg.VPICBaseURL))
+
+	r := newRouter(authHandler, vehiclesHandler, maintenanceHandler, vpicHandler)
 
 	err = http.ListenAndServe(":"+cfg.Port, r)
 
@@ -60,6 +63,7 @@ func newRouter(
 	authHandler *auth.Handler,
 	vehiclesHandler *vehicles.Handler,
 	maintenanceHandler *maintenance.Handler,
+	vpicHandler *vpic.Handler,
 ) http.Handler {
 	r := chi.NewRouter()
 
@@ -86,6 +90,7 @@ func newRouter(
 			"/api/vehicles/{"+maintenance.VehicleIDParam+"}/maintenance",
 			maintenanceHandler.Routes(),
 		)
+		r.With(auth.RequireAuth).Mount("/api/vpic", vpicHandler.Routes())
 	})
 
 	return r

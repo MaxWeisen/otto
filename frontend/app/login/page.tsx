@@ -1,11 +1,25 @@
 import { Toast } from "@/components/toast";
 import { Button } from "@/components/ui/button";
+import { getCurrentUser } from "@/lib/auth";
+import { redirect, unstable_rethrow } from "next/navigation";
 
 export default async function LoginPage({
   searchParams,
 }: {
   searchParams: Promise<{ reason?: string }>;
 }) {
+  let user = null;
+
+  try {
+    user = await getCurrentUser();
+  } catch (error) {
+    unstable_rethrow(error);
+  }
+
+  if (user) {
+    redirect("/vehicles");
+  }
+
   const { reason } = await searchParams;
   return (
     <main className="flex-1 flex flex-col items-center justify-center gap-2">

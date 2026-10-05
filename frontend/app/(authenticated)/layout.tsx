@@ -1,6 +1,6 @@
 import { AppBar } from "@/components/app-bar";
+import { redirectToLogin } from "@/lib/api";
 import { getCurrentUser } from "@/lib/auth";
-import { redirect } from "next/navigation";
 
 export default async function AuthenticatedLayout({
   children,
@@ -10,12 +10,14 @@ export default async function AuthenticatedLayout({
   const user = await getCurrentUser();
 
   if (!user) {
-    redirect("/login?reason=unauthorized");
+    redirectToLogin();
   }
   return (
     <>
       <AppBar user={user} />
-      {children}
+      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 py-8 sm:px-6 sm:py-12">
+        {children}
+      </main>
     </>
   );
 }

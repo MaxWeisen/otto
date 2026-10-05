@@ -1,6 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { cache } from "react";
+import { apiFetch, SESSION_TOKEN_KEY } from "@/lib/api";
 
 export type User = {
   id: string;
@@ -9,8 +10,10 @@ export type User = {
   avatarUrl: string;
 };
 
-export const SESSION_TOKEN_KEY = "otto_session_token";
-
+/**
+ * The signed-in visitor, or null when there is no valid session. Throws when
+ * the API cannot be reached.
+ */
 export const getCurrentUser = cache(async (): Promise<User | null> => {
   const sessionToken = (await cookies()).get(SESSION_TOKEN_KEY);
 
@@ -18,10 +21,7 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
     return null;
   }
 
-  const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, {
-    headers: { Cookie: `${SESSION_TOKEN_KEY}=${sessionToken.value}` },
-    cache: "no-store",
-  });
+  const response = await apiFetch("/auth/me", { onUnauthorized: "return" });
 
   if (!response.ok) {
     return null;

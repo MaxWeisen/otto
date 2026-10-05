@@ -3,10 +3,8 @@ package vehicles
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
-	"regexp"
 	"strings"
 	"time"
 
@@ -15,14 +13,6 @@ import (
 	"github.com/maxweisen/otto/backend/internal/httpx"
 	"github.com/maxweisen/otto/backend/internal/store"
 	"github.com/maxweisen/otto/backend/internal/validate"
-)
-
-const minVehicleYear = 1886
-const vinLength = 17
-const maxTextLength = 255
-
-var vinPattern = regexp.MustCompile(
-	fmt.Sprintf("^[A-HJ-NPR-Z0-9]{%d}$", vinLength),
 )
 
 var now = time.Now
@@ -227,14 +217,10 @@ func (in *VehicleInput) normalizeAndValidate() error {
 		in.Vin = &upper
 	}
 
-	maxYear := now().Year() + 1
+	err := validate.ModelYear("year", int(in.Year), now())
 
-	if int(in.Year) < minVehicleYear || int(in.Year) > maxYear {
-		return fmt.Errorf(
-			"year must be between %d and %d",
-			minVehicleYear,
-			maxYear,
-		)
+	if err != nil {
+		return err
 	}
 
 	if in.Make == "" {
@@ -257,18 +243,19 @@ func (in *VehicleInput) normalizeAndValidate() error {
 	}
 
 	for _, check := range textChecks {
-		err := validate.Text(check.field, check.value, maxTextLength)
+		err := validate.Text(check.field, check.value, validate.MaxTextLength)
 
 		if err != nil {
 			return err
 		}
 	}
 
-	if in.Vin != nil && !vinPattern.MatchString(*in.Vin) {
-		return fmt.Errorf(
-			"vin must be %d characters using letters and digits, excluding I, O and Q",
-			vinLength,
-		)
+	if in.Vin != nil {
+		err := validate.VIN("vin", *in.Vin)
+
+		if err != nil {
+			return err
+		}
 	}
 
 	if in.Mileage != nil && *in.Mileage < 0 {

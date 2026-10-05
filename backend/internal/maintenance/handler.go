@@ -41,7 +41,9 @@ var recordTypes = []string{
 
 // minPerformedAt is the earliest accepted service date, the year of the
 // first production automobile.
-var minPerformedAt = time.Date(1886, time.January, 1, 0, 0, 0, 0, time.UTC)
+var minPerformedAt = time.Date(
+	validate.MinModelYear, time.January, 1, 0, 0, 0, 0, time.UTC,
+)
 
 // maxUTCOffset is the furthest any time zone runs ahead of UTC. A date is
 // only in the future once it has not yet started anywhere on Earth.
