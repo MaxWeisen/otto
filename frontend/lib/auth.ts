@@ -2,9 +2,14 @@ import "server-only";
 import { cookies } from "next/headers";
 import { cache } from "react";
 
-type User = { id: string; name: string; email: string; avatarUrl: string };
+export type User = {
+  id: string;
+  name: string;
+  email: string;
+  avatarUrl: string;
+};
 
-const SESSION_TOKEN_KEY = "otto_session_token";
+export const SESSION_TOKEN_KEY = "otto_session_token";
 
 export const getCurrentUser = cache(async (): Promise<User | null> => {
   const sessionToken = (await cookies()).get(SESSION_TOKEN_KEY);
