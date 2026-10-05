@@ -17,6 +17,7 @@ export async function logout() {
           method: "POST",
           headers: { Cookie: `${SESSION_TOKEN_KEY}=${sessionToken.value}` },
           cache: "no-store",
+          signal: AbortSignal.timeout(5000),
         },
       );
 
