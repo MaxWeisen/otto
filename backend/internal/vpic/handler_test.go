@@ -1,6 +1,7 @@
 package vpic
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -371,4 +372,39 @@ func TestHandlerWithClientUpstreamFailure(t *testing.T) {
 	}
 
 	assertError(t, rec, http.StatusBadGateway, upstreamErrorMessage)
+}
+
+func TestHandlerSkipsLoggingWhenClientGoesAway(t *testing.T) {
+	var logs bytes.Buffer
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() {
+		slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	})
+
+	started := make(chan struct{})
+	fake := newFakeVPIC(t, func(w http.ResponseWriter, r *http.Request) {
+		close(started)
+		<-r.Context().Done()
+	})
+	handler := NewHandler(NewClient(fake.server.URL))
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go func() {
+		<-started
+		cancel()
+	}()
+
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/models?make=Toyota&year=2020", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != statusClientClosedRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, statusClientClosedRequest)
+	}
+
+	if logs.Len() != 0 {
+		t.Fatalf("logged %q, want nothing for a canceled request", logs.String())
+	}
 }

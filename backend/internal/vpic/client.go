@@ -161,8 +161,9 @@ func (c *Client) DecodeVIN(ctx context.Context, vin string) (DecodedVIN, error) 
 	return decoded, nil
 }
 
-// get fetches path from vPIC as JSON and decodes it into dst. Any failure is
-// reported as ErrUpstream.
+// get fetches path from vPIC as JSON and decodes it into dst. A failure caused
+// by ctx ending is reported as the context error, and any other failure as
+// ErrUpstream.
 func (c *Client) get(ctx context.Context, path string, dst any) error {
 	req, err := http.NewRequestWithContext(
 		ctx,
@@ -178,6 +179,14 @@ func (c *Client) get(ctx context.Context, path string, dst any) error {
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := c.httpClient.Do(req)
+
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		if resp != nil {
+			resp.Body.Close()
+		}
+
+		return fmt.Errorf("vpic request: %w", ctxErr)
+	}
 
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrUpstream, err)

@@ -5,6 +5,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import type { Vehicle } from "@/lib/vehicles";
 
 const mileageFormatter = new Intl.NumberFormat("en-US");
@@ -29,10 +30,11 @@ export function VehicleCard({ vehicle }: { vehicle: Vehicle }) {
             {vehicle.mileage !== null &&
               `${mileageFormatter.format(vehicle.mileage)} mi`}
           </VehicleDetail>
-          <VehicleDetail label="VIN">
-            {vehicle.vin && (
-              <span className="tracking-wider">{vehicle.vin}</span>
-            )}
+          <VehicleDetail
+            label="VIN"
+            wrap
+          >
+            {vehicle.vin}
           </VehicleDetail>
         </dl>
       </CardContent>
@@ -42,15 +44,18 @@ export function VehicleCard({ vehicle }: { vehicle: Vehicle }) {
 
 function VehicleDetail({
   label,
+  wrap = false,
   children,
 }: {
   label: string;
+  /** Wraps the value across lines instead of truncating it. */
+  wrap?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <>
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className="truncate text-right">
+      <dd className={cn("text-right", wrap ? "break-all" : "truncate")}>
         {children || <span className="text-muted-foreground">-</span>}
       </dd>
     </>

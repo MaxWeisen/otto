@@ -364,7 +364,31 @@ func TestClientHonorsContextCancellation(t *testing.T) {
 
 	_, err := client.DecodeVIN(ctx, "1HGCM82633A004352")
 
-	if !errors.Is(err, ErrUpstream) || !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("error = %v, want ErrUpstream wrapping context.DeadlineExceeded", err)
+	if errors.Is(err, ErrUpstream) || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("error = %v, want context.DeadlineExceeded and not ErrUpstream", err)
+	}
+}
+
+func TestClientCanceledIsNotUpstreamError(t *testing.T) {
+	t.Parallel()
+
+	started := make(chan struct{})
+	fake := newFakeVPIC(t, func(w http.ResponseWriter, r *http.Request) {
+		close(started)
+		<-r.Context().Done()
+	})
+
+	client := NewClient(fake.server.URL)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go func() {
+		<-started
+		cancel()
+	}()
+
+	_, err := client.ModelsForMakeYear(ctx, "Toyota", 2020)
+
+	if errors.Is(err, ErrUpstream) || !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v, want context.Canceled and not ErrUpstream", err)
 	}
 }

@@ -19,6 +19,10 @@ var now = time.Now
 
 const upstreamErrorMessage = "Vehicle data lookup is unavailable right now. Please try again."
 
+// statusClientClosedRequest is the non-standard status recorded when the
+// client goes away before the lookup finishes.
+const statusClientClosedRequest = 499
+
 type lookupService interface {
 	ModelsForMakeYear(ctx context.Context, makeName string, year int) ([]string, error)
 	DecodeVIN(ctx context.Context, vin string) (DecodedVIN, error)
@@ -128,7 +132,8 @@ func parseYear(raw string) (int, error) {
 }
 
 // writeLookupError maps an error from the lookup service to an HTTP response.
-// Upstream details are logged but never sent to the client.
+// Upstream details are logged but never sent to the client. Lookups abandoned
+// by the client are not logged.
 func writeLookupError(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -136,6 +141,8 @@ func writeLookupError(
 	err error,
 ) {
 	switch {
+	case r.Context().Err() != nil:
+		w.WriteHeader(statusClientClosedRequest)
 	case errors.Is(err, ErrVINNotFound):
 		httpx.WriteError(w, http.StatusNotFound, "No vehicle data found for this VIN.")
 	case errors.Is(err, ErrUpstream):
