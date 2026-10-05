@@ -28,6 +28,11 @@ export async function logout() {
     }
   }
 
-  cookieStore.delete(SESSION_TOKEN_KEY);
+  const domain = process.env.COOKIE_DOMAIN;
+  if (domain) {
+    cookieStore.delete({ name: SESSION_TOKEN_KEY, path: "/", domain });
+  } else {
+    cookieStore.delete(SESSION_TOKEN_KEY);
+  }
   redirect("/");
 }
