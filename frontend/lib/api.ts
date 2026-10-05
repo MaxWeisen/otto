@@ -20,7 +20,8 @@ export function redirectToLogin(): never {
 
 /**
  * Calls the otto API, forwarding the visitor's session cookie so the backend
- * can authenticate the request.
+ * can authenticate the request. A 401 response redirects to the login page
+ * unless onUnauthorized is "return".
  */
 export async function apiFetch(
   path: string,

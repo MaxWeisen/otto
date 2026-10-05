@@ -30,8 +30,13 @@ OTTO_TEST_DATABASE_URL='postgres://dev_user:dev_password@localhost:5532/otto_tes
 
 ### Vehicle data lookup
 
-The backend proxies NHTSA's public [vPIC API](https://vpic.nhtsa.dot.gov/api/) under `/api/vpic` for model lists and VIN decoding, for signed-in users only.
-Answers are cached in memory.
+The backend proxies NHTSA's public [vPIC API](https://vpic.nhtsa.dot.gov/api/) under `/api/vpic` for model lists and VIN decoding, for signed-in users only:
+
+- `GET /api/vpic/models?make=<make>&year=<year>` returns the sorted model names for a make and model year as `{"models": [...]}`.
+- `GET /api/vpic/decode/<vin>` returns the `vin`, `year`, `make`, `model` and `trim` decoded from a 17-character VIN, with `null` for fields vPIC has no data for, or 404 when vPIC knows nothing about the VIN.
+
+Inputs are validated with the same rules as vehicles, and an unreachable or failing vPIC answers 502.
+Upstream requests time out after 5 seconds, and answers are cached in memory for 24 hours in LRU caches of up to 1000 entries each.
 Set `VPIC_BASE_URL` to point it at another vPIC-compatible server; it defaults to `https://vpic.nhtsa.dot.gov/api`.
 
 ## Frontend
