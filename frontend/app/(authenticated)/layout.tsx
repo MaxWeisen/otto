@@ -1,3 +1,4 @@
+import { AppBar } from "@/components/app-bar";
 import { getCurrentUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
@@ -11,5 +12,10 @@ export default async function AuthenticatedLayout({
   if (!user) {
     redirect("/login?reason=unauthorized");
   }
-  return <>{children}</>;
+  return (
+    <>
+      <AppBar user={user} />
+      {children}
+    </>
+  );
 }
