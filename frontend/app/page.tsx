@@ -22,10 +22,7 @@ export default async function LandingPage() {
         </div>
 
         <div className="flex w-100 justify-end gap-6 sm:items-end sm:text-right">
-          <Button
-            render={<Link href="/login" />}
-            nativeButton={false}
-          >
+          <Button render={<Link href="/login" />} nativeButton={false}>
             Signup or Login
           </Button>
         </div>
