@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { VehicleDetails } from "@/components/vehicle-details";
+import { VehicleDetailsCard } from "@/components/vehicle-details-card";
 import { getVehicle } from "@/lib/vehicles";
+import { updateVehicleAction } from "../actions";
 
 type VehiclePageProps = {
   params: Promise<{ id: string }>;
@@ -27,18 +27,10 @@ export default async function VehiclePage({ params }: VehiclePageProps) {
         title={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
         description={vehicle.nickname}
       />
-      <Card>
-        <CardHeader>
-          <CardTitle>Details</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <VehicleDetails
-            vehicle={vehicle}
-            variant="full"
-            className="border-t pt-3"
-          />
-        </CardContent>
-      </Card>
+      <VehicleDetailsCard
+        vehicle={vehicle}
+        action={updateVehicleAction.bind(null, vehicle.id)}
+      />
     </div>
   );
 }

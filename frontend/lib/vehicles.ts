@@ -55,14 +55,45 @@ function isVehicleId(id: string): boolean {
   return /^[1-9]\d*$/.test(id) && Number.isSafeInteger(Number(id));
 }
 
-export async function createVehicle(
+export function createVehicle(
+  input: VehicleInput,
+): Promise<MutationResult<Vehicle>> {
+  return sendVehicle("/api/vehicles", "POST", input);
+}
+
+/**
+ * Replaces all of one of the visitor's vehicles' fields. An id that is not a
+ * vehicle id, or a vehicle that does not exist or belongs to someone else,
+ * shows the not-found page, like getVehicle. The id arrives from the browser
+ * through a server action, so it is checked to really be a number.
+ */
+export async function updateVehicle(
+  id: number,
+  input: VehicleInput,
+): Promise<MutationResult<Vehicle>> {
+  if (!Number.isSafeInteger(id) || id < 1) {
+    notFound();
+  }
+
+  const result = await sendVehicle(`/api/vehicles/${id}`, "PUT", input);
+
+  if (!result.ok && result.status === 404) {
+    notFound();
+  }
+
+  return result;
+}
+
+async function sendVehicle(
+  path: string,
+  method: "POST" | "PUT",
   input: VehicleInput,
 ): Promise<MutationResult<Vehicle>> {
   let response: Response;
 
   try {
-    response = await apiFetch("/api/vehicles", {
-      method: "POST",
+    response = await apiFetch(path, {
+      method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
     });

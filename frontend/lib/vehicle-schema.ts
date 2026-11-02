@@ -35,6 +35,16 @@ export type VehicleFormValues = Record<VehicleField, string>;
 
 export type VehicleFieldErrors = Partial<Record<VehicleField, string[]>>;
 
+const VEHICLE_FIELD_LABELS: Record<VehicleField, string> = {
+  year: "Year",
+  make: "Make",
+  model: "Model",
+  trim: "Trim",
+  nickname: "Nickname",
+  mileage: "Mileage",
+  vin: "VIN",
+};
+
 function text(label: string) {
   return z
     .string()
@@ -155,6 +165,25 @@ export function vinError(vin: string): string | undefined {
   const result = vehicleFormSchema.shape.vin.safeParse(vin);
 
   return result.success ? undefined : result.error.issues[0]?.message;
+}
+
+/**
+ * Maps an API validation message to the field it is about. The backend names
+ * the field first, as in "vin must be 17 characters", so a message that
+ * starts with a field name becomes that field's error and anything else
+ * stays a message for the whole form.
+ */
+export function vehicleApiErrors(
+  message: string,
+): { errors: VehicleFieldErrors } | { message: string } {
+  const [, name, rest] = /^(\S+)\s+(.+)$/.exec(message) ?? [];
+  const field = VEHICLE_FIELDS.find((field) => field === name?.toLowerCase());
+
+  if (!field) {
+    return { message };
+  }
+
+  return { errors: { [field]: [`${VEHICLE_FIELD_LABELS[field]} ${rest}`] } };
 }
 
 export function readVehicleFormValues(formData: FormData): VehicleFormValues {

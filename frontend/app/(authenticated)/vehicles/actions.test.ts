@@ -1,8 +1,17 @@
 import { http, HttpResponse } from "msw";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { cookieJar, RedirectError, revalidatePath } from "@/test/next-mocks";
+import {
+  cookieJar,
+  NotFoundError,
+  RedirectError,
+  revalidatePath,
+} from "@/test/next-mocks";
 import { API_URL, server } from "@/test/server";
-import { createVehicleAction, type VehicleFormState } from "./actions";
+import {
+  createVehicleAction,
+  updateVehicleAction,
+  type VehicleFormState,
+} from "./actions";
 
 // Pin the clock so the latest accepted model year (next year) is stable.
 beforeAll(() => {
@@ -103,7 +112,7 @@ describe("createVehicleAction", () => {
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 
-  it("passes backend validation errors through", async () => {
+  it("passes backend validation errors through as field errors", async () => {
     server.use(
       http.post(`${API_URL}/api/vehicles`, () =>
         HttpResponse.json(
@@ -118,8 +127,10 @@ describe("createVehicleAction", () => {
       formData(validFields),
     );
 
-    expect(state.message).toBe("Vin must be 17 characters");
-    expect(state.values).toEqual(validFields);
+    expect(state).toEqual({
+      values: validFields,
+      errors: { vin: ["VIN must be 17 characters"] },
+    });
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 
@@ -165,6 +176,164 @@ describe("createVehicleAction", () => {
 
     await expectRedirect(
       createVehicleAction(initialState, formData(validFields)),
+      "/login?reason=unauthorized",
+    );
+  });
+});
+
+describe("updateVehicleAction", () => {
+  const savedAccord = {
+    id: 7,
+    year: 2003,
+    make: "Honda",
+    model: "Accord",
+    trim: null,
+    vin: "1HGCM82633A004352",
+    nickname: "Commuter",
+    mileage: 182000,
+  };
+
+  function serveUpdate(status: number, body: object) {
+    const requests: { id: string; body: unknown; cookie: string | null }[] = [];
+
+    server.use(
+      http.put(`${API_URL}/api/vehicles/:id`, async ({ params, request }) => {
+        requests.push({
+          id: String(params.id),
+          body: await request.json(),
+          cookie: request.headers.get("cookie"),
+        });
+
+        return HttpResponse.json(body, { status });
+      }),
+    );
+
+    return requests;
+  }
+
+  it("replaces the vehicle with normalized data and refreshes its pages", async () => {
+    cookieJar.set("otto_session_token", "session-123");
+    const requests = serveUpdate(200, savedAccord);
+
+    const state = await updateVehicleAction(
+      7,
+      initialState,
+      formData(validFields),
+    );
+
+    expect(state).toEqual({ values: validFields, saved: true });
+    expect(requests).toEqual([
+      {
+        id: "7",
+        cookie: "otto_session_token=session-123",
+        body: {
+          year: 2003,
+          make: "Honda",
+          model: "Accord",
+          trim: null,
+          nickname: "Commuter",
+          mileage: 182000,
+          vin: "1HGCM82633A004352",
+        },
+      },
+    ]);
+    expect(revalidatePath).toHaveBeenCalledWith("/vehicles/7");
+    expect(revalidatePath).toHaveBeenCalledWith("/vehicles");
+  });
+
+  it("returns field errors without calling the API", async () => {
+    const requests = serveUpdate(200, savedAccord);
+    const fields = { ...validFields, make: "", mileage: "-5", vin: "ABC" };
+
+    const state = await updateVehicleAction(7, initialState, formData(fields));
+
+    expect(state).toEqual({
+      values: fields,
+      errors: {
+        make: ["Make is required"],
+        mileage: ["Mileage must be a whole number of 0 or more"],
+        vin: ["VIN must be 17 characters (currently 3)"],
+      },
+    });
+    expect(requests).toEqual([]);
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("maps a backend validation error to its field", async () => {
+    serveUpdate(400, { error: "year must be between 1886 and 2027" });
+
+    const state = await updateVehicleAction(
+      7,
+      initialState,
+      formData(validFields),
+    );
+
+    expect(state).toEqual({
+      values: validFields,
+      errors: { year: ["Year must be between 1886 and 2027"] },
+    });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("shows other backend errors as a message for the form", async () => {
+    serveUpdate(500, { error: "Something went wrong. Please try again." });
+
+    const state = await updateVehicleAction(
+      7,
+      initialState,
+      formData(validFields),
+    );
+
+    expect(state).toEqual({
+      values: validFields,
+      message: "Something went wrong. Please try again.",
+    });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("shows the not-found page for a vehicle the visitor does not own", async () => {
+    serveUpdate(404, { error: "Vehicle not found." });
+
+    await expect(
+      updateVehicleAction(8, initialState, formData(validFields)),
+    ).rejects.toThrow(NotFoundError);
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it.each([0, -1, 1.5, Number.NaN, "7" as unknown as number])(
+    "shows the not-found page for the crafted id %j without asking the backend",
+    async (id) => {
+      const requests = serveUpdate(200, savedAccord);
+
+      await expect(
+        updateVehicleAction(id, initialState, formData(validFields)),
+      ).rejects.toThrow(NotFoundError);
+      expect(requests).toEqual([]);
+    },
+  );
+
+  it("explains when the backend cannot be reached", async () => {
+    server.use(
+      http.put(`${API_URL}/api/vehicles/:id`, () => HttpResponse.error()),
+    );
+
+    const state = await updateVehicleAction(
+      7,
+      initialState,
+      formData(validFields),
+    );
+
+    expect(state).toEqual({
+      values: validFields,
+      message: "Could not reach the server. Please try again.",
+    });
+  });
+
+  it("sends signed-out visitors to the login page", async () => {
+    serveUpdate(401, { error: "Unauthorized." });
+
+    await expectRedirect(
+      updateVehicleAction(7, initialState, formData(validFields)),
       "/login?reason=unauthorized",
     );
   });

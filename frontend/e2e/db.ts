@@ -99,6 +99,19 @@ function insertVehicleFor(
   });
 }
 
+/** Reads a vehicle's stored fields, whoever owns it. */
+export function findVehicle(id: number): Promise<SeedVehicle | undefined> {
+  return withDb(async (db) => {
+    const { rows } = await db.query<SeedVehicle>(
+      `SELECT year, make, model, trim, vin, nickname, mileage
+       FROM vehicles WHERE id = $1`,
+      [id],
+    );
+
+    return rows[0];
+  });
+}
+
 /**
  * Removes this run's test user and the other user along with their sessions
  * and vehicles.
