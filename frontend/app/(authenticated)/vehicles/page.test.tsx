@@ -70,11 +70,13 @@ describe("VehiclesPage", () => {
 
     expect(within(accord).getByText("2003 Honda Accord")).toBeInTheDocument();
     expect(within(accord).getByText("Commuter")).toBeInTheDocument();
+    expect(within(accord).getByText("Honda")).toBeInTheDocument();
     expect(within(accord).getByText("EX-V6")).toBeInTheDocument();
     expect(within(accord).getByText("182,000 mi")).toBeInTheDocument();
     expect(within(accord).getByText("1HGCM82633A004352")).toBeInTheDocument();
 
     expect(within(ford).getByText("2019 Ford F-150")).toBeInTheDocument();
+    expect(within(ford).getByText("Ford")).toBeInTheDocument();
     expect(within(ford).getAllByText("-")).toHaveLength(3);
   });
 

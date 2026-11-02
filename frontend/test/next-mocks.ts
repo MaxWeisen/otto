@@ -10,6 +10,13 @@ export class RedirectError extends Error {
   }
 }
 
+/** The error the mocked notFound() throws, like Next's own notFound. */
+export class NotFoundError extends Error {
+  constructor() {
+    super("NEXT_HTTP_ERROR_FALLBACK;404");
+  }
+}
+
 export const router = {
   push: vi.fn(),
   replace: vi.fn(),
@@ -27,8 +34,11 @@ export const navigationModule = {
   redirect: (url: string): never => {
     throw new RedirectError(url);
   },
+  notFound: (): never => {
+    throw new NotFoundError();
+  },
   unstable_rethrow: (error: unknown) => {
-    if (error instanceof RedirectError) {
+    if (error instanceof RedirectError || error instanceof NotFoundError) {
       throw error;
     }
   },

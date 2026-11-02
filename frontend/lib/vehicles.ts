@@ -1,5 +1,6 @@
 import "server-only";
-import { unstable_rethrow } from "next/navigation";
+import { cache } from "react";
+import { notFound, unstable_rethrow } from "next/navigation";
 import { apiFetch, readApiError } from "@/lib/api";
 import type { VehicleInput } from "@/lib/vehicle-schema";
 
@@ -25,6 +26,33 @@ export async function listVehicles(): Promise<Vehicle[]> {
   }
 
   return response.json();
+}
+
+/**
+ * Loads one of the visitor's vehicles. An id that is not a vehicle id, or a
+ * vehicle the visitor does not own, shows the not-found page; the backend
+ * answers 404 for both missing and other people's vehicles.
+ */
+export const getVehicle = cache(async (id: string): Promise<Vehicle> => {
+  if (!isVehicleId(id)) {
+    notFound();
+  }
+
+  const response = await apiFetch(`/api/vehicles/${id}`);
+
+  if (response.status === 404) {
+    notFound();
+  }
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response));
+  }
+
+  return response.json();
+});
+
+function isVehicleId(id: string): boolean {
+  return /^[1-9]\d*$/.test(id) && Number.isSafeInteger(Number(id));
 }
 
 export async function createVehicle(
