@@ -36,9 +36,78 @@ export function clearVehicles(): Promise<void> {
   });
 }
 
-/** Removes this run's test user along with its sessions and vehicles. */
+export type SeedVehicle = {
+  year: number;
+  make: string;
+  model: string;
+  trim?: string;
+  vin?: string;
+  nickname?: string;
+  mileage?: number;
+};
+
+/**
+ * The google_sub of a second user who signs in nowhere and only owns
+ * vehicles, for checking that the test user cannot see them.
+ */
+function otherUserGoogleSub(): string {
+  return `${e2eGoogleSub()}-other`;
+}
+
+/** Adds a vehicle to the test user's garage and returns its id. */
+export function insertVehicle(vehicle: SeedVehicle): Promise<number> {
+  return insertVehicleFor(e2eGoogleSub(), vehicle);
+}
+
+/** Adds a vehicle to the other user's garage and returns its id. */
+export function insertOtherUsersVehicle(vehicle: SeedVehicle): Promise<number> {
+  return withDb(async (db) => {
+    await db.query(
+      `INSERT INTO users (google_sub, email, name)
+       VALUES ($1, 'e2e-other@example.invalid', 'E2E Other Tester')
+       ON CONFLICT (google_sub) DO NOTHING`,
+      [otherUserGoogleSub()],
+    );
+
+    return insertVehicleFor(otherUserGoogleSub(), vehicle);
+  });
+}
+
+function insertVehicleFor(
+  googleSub: string,
+  vehicle: SeedVehicle,
+): Promise<number> {
+  return withDb(async (db) => {
+    const { rows } = await db.query<{ id: string }>(
+      `INSERT INTO vehicles
+         (user_id, year, make, model, trim, vin, nickname, mileage)
+       SELECT id, $2, $3, $4, $5, $6, $7, $8 FROM users WHERE google_sub = $1
+       RETURNING id`,
+      [
+        googleSub,
+        vehicle.year,
+        vehicle.make,
+        vehicle.model,
+        vehicle.trim ?? null,
+        vehicle.vin ?? null,
+        vehicle.nickname ?? null,
+        vehicle.mileage ?? null,
+      ],
+    );
+
+    return Number(rows[0].id);
+  });
+}
+
+/**
+ * Removes this run's test user and the other user along with their sessions
+ * and vehicles.
+ */
 export function removeTestUser(): Promise<void> {
-  return removeUsers("google_sub = $1", [e2eGoogleSub()]);
+  return removeUsers("google_sub IN ($1, $2)", [
+    e2eGoogleSub(),
+    otherUserGoogleSub(),
+  ]);
 }
 
 /** Removes test users that earlier, interrupted runs left behind. */

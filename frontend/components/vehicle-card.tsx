@@ -1,22 +1,24 @@
+import Link from "next/link";
+import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { VehicleDetails } from "@/components/vehicle-details";
 import type { Vehicle } from "@/lib/vehicles";
 
-const mileageFormatter = new Intl.NumberFormat("en-US");
-
 export function VehicleCard({ vehicle }: { vehicle: Vehicle }) {
+  const name = `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
+
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle className="break-words">
-          {vehicle.year} {vehicle.make} {vehicle.model}
-        </CardTitle>
+        <CardTitle className="break-words">{name}</CardTitle>
         {vehicle.nickname && (
           <CardDescription className="break-words">
             {vehicle.nickname}
@@ -24,40 +26,23 @@ export function VehicleCard({ vehicle }: { vehicle: Vehicle }) {
         )}
       </CardHeader>
       <CardContent className="mt-auto">
-        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 border-t pt-3">
-          <VehicleDetail label="Trim">{vehicle.trim}</VehicleDetail>
-          <VehicleDetail label="Mileage">
-            {vehicle.mileage !== null &&
-              `${mileageFormatter.format(vehicle.mileage)} mi`}
-          </VehicleDetail>
-          <VehicleDetail
-            label="VIN"
-            wrap
-          >
-            {vehicle.vin}
-          </VehicleDetail>
-        </dl>
+        <VehicleDetails
+          vehicle={vehicle}
+          className="border-t pt-3"
+        />
       </CardContent>
+      <CardFooter className="justify-end">
+        <Button
+          variant="outline"
+          size="sm"
+          render={<Link href={`/vehicles/${vehicle.id}`} />}
+          nativeButton={false}
+          aria-label={`Details for ${name}`}
+        >
+          Details
+          <ArrowRightIcon data-icon="inline-end" />
+        </Button>
+      </CardFooter>
     </Card>
-  );
-}
-
-function VehicleDetail({
-  label,
-  wrap = false,
-  children,
-}: {
-  label: string;
-  /** Wraps the value across lines instead of truncating it. */
-  wrap?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <>
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className={cn("text-right", wrap ? "break-all" : "truncate")}>
-        {children || <span className="text-muted-foreground">-</span>}
-      </dd>
-    </>
   );
 }

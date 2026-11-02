@@ -29,11 +29,11 @@ export function PageHeader({
       )}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-1">
-          <h1 className="font-heading text-lg font-semibold tracking-tight">
+          <h1 className="font-heading text-lg font-semibold tracking-tight break-words">
             {title}
           </h1>
           {description && (
-            <p className="text-xs/relaxed text-muted-foreground">
+            <p className="text-xs/relaxed break-words text-muted-foreground">
               {description}
             </p>
           )}

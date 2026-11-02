@@ -5,5 +5,16 @@ export function ThemeProvider({
   children,
   ...props
 }: React.ComponentProps<typeof NextThemesProvider>) {
-  return <NextThemesProvider {...props}>{children}</NextThemesProvider>;
+  return (
+    <NextThemesProvider
+      {...props}
+      scriptProps={
+        typeof window === "undefined"
+          ? props.scriptProps
+          : { ...props.scriptProps, type: "application/json" }
+      }
+    >
+      {children}
+    </NextThemesProvider>
+  );
 }
