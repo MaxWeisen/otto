@@ -458,7 +458,11 @@ export function ModelField({ fields }: { fields: VehicleFields }) {
             <input
               type="hidden"
               name="model"
-              value={hasList && options.includes(value) ? value : ""}
+              value={
+                state.status === "ready" && !options.includes(value)
+                  ? ""
+                  : value
+              }
             />
           )}
         </>

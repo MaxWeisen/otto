@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { http, HttpResponse } from "msw";
+import { delay, http, HttpResponse } from "msw";
 import { toast } from "sonner";
 import {
   afterAll,
@@ -298,6 +298,31 @@ describe("VehicleDetailsCard", () => {
     );
 
     expect(detail("Mileage")).toHaveTextContent("190,500 mi");
+  });
+
+  it("saves the prefilled model while the model list is still loading", async () => {
+    server.use(
+      http.get("*/api/vpic/models", async () => {
+        await delay(1000);
+        return HttpResponse.json({ models: ["Accord", "Civic"] });
+      }),
+    );
+    const action = savingAction(() => ({ saved: true }));
+    const { user } = renderCard({ ...accord, year: 2004 }, action);
+
+    await user.click(editButton());
+
+    expect(screen.getByRole("combobox", { name: "Model" })).toHaveAttribute(
+      "placeholder",
+      "Loading models...",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(form()).not.toBeInTheDocument());
+    expect(screen.queryByText("Model is required")).not.toBeInTheDocument();
+    expect(action).toHaveBeenCalledTimes(1);
+    expect(action.mock.calls[0][1].get("model")).toBe("Accord");
   });
 
   it("disables Save and Cancel and ignores Escape while saving", async () => {
