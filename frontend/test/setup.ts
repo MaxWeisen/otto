@@ -13,6 +13,12 @@ vi.mock(
   async () => (await import("./next-mocks")).headersModule,
 );
 vi.mock("next/cache", async () => (await import("./next-mocks")).cacheModule);
+// Toasts are spies everywhere except the Toaster's own test, which unmocks
+// sonner. afterEach clears their calls.
+vi.mock("sonner", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("sonner")>()),
+  toast: (await import("./sonner-mock")).toast,
+}));
 
 // jsdom lacks the layout APIs the Base UI popups rely on.
 class ResizeObserverStub {

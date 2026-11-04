@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
+import { toast } from "sonner";
 import { describe, expect, it } from "vitest";
-import { Toaster } from "@/components/ui/sonner";
 import { RedirectError, router } from "@/test/next-mocks";
 import { API_URL, server } from "@/test/server";
 import VehiclesPage from "./page";
@@ -11,12 +11,7 @@ async function renderPage(status?: string) {
     searchParams: Promise.resolve({ status }),
   });
 
-  return render(
-    <>
-      <Toaster />
-      {page}
-    </>,
-  );
+  return render(page);
 }
 
 function serveVehicles(vehicles: unknown[]) {
@@ -85,7 +80,9 @@ describe("VehiclesPage", () => {
 
     await renderPage("created");
 
-    expect(await screen.findByText("Vehicle added")).toBeInTheDocument();
+    expect(toast.success).toHaveBeenCalledWith("Vehicle added", {
+      id: "toast-Vehicle added",
+    });
     expect(router.replace).toHaveBeenCalledWith("/vehicles");
   });
 

@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
+import { toast } from "sonner";
 import {
   afterAll,
   beforeAll,
@@ -11,7 +12,6 @@ import {
   vi,
 } from "vitest";
 import type { VehicleFormState } from "@/app/(authenticated)/vehicles/actions";
-import { Toaster } from "@/components/ui/sonner";
 import { VehicleDetailsCard } from "@/components/vehicle-details-card";
 import type { Vehicle } from "@/lib/vehicles";
 import { server } from "@/test/server";
@@ -65,13 +65,10 @@ function renderCard(
 ) {
   const user = userEvent.setup();
   const view = render(
-    <>
-      <Toaster />
-      <VehicleDetailsCard
-        vehicle={vehicle}
-        action={action}
-      />
-    </>,
+    <VehicleDetailsCard
+      vehicle={vehicle}
+      action={action}
+    />,
   );
 
   return { user, action, view };
@@ -273,12 +270,8 @@ describe("VehicleDetailsCard", () => {
     await user.type(textbox(/^Nickname/), "Daily");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
-    expect(
-      await screen.findByText("Vehicle updated", {
-        selector: "[data-sonner-toast] *",
-      }),
-    ).toBeInTheDocument();
-    expect(form()).not.toBeInTheDocument();
+    await waitFor(() => expect(form()).not.toBeInTheDocument());
+    expect(toast.success).toHaveBeenCalledWith("Vehicle updated");
     expect(editButton()).toHaveFocus();
     expect(action).toHaveBeenCalledTimes(1);
     expect(Object.fromEntries(action.mock.calls[0][1])).toEqual({
@@ -293,18 +286,15 @@ describe("VehicleDetailsCard", () => {
 
     // The server action refreshes the page with the saved vehicle.
     view.rerender(
-      <>
-        <Toaster />
-        <VehicleDetailsCard
-          vehicle={{
-            ...accord,
-            year: 2005,
-            mileage: 190500,
-            nickname: "Daily",
-          }}
-          action={action}
-        />
-      </>,
+      <VehicleDetailsCard
+        vehicle={{
+          ...accord,
+          year: 2005,
+          mileage: 190500,
+          nickname: "Daily",
+        }}
+        action={action}
+      />,
     );
 
     expect(detail("Mileage")).toHaveTextContent("190,500 mi");
@@ -350,11 +340,9 @@ describe("VehicleDetailsCard", () => {
         selector: "form [role=alert] *",
       }),
     ).toBeInTheDocument();
-    expect(
-      await screen.findByText("Something went wrong. Please try again.", {
-        selector: "[data-sonner-toast] *",
-      }),
-    ).toBeInTheDocument();
+    expect(toast.error).toHaveBeenCalledWith(
+      "Something went wrong. Please try again.",
+    );
     expect(form()).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save" })).toHaveFocus();
   });

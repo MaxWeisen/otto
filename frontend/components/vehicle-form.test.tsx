@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay, http, HttpResponse } from "msw";
+import { toast } from "sonner";
 import {
   afterAll,
   beforeAll,
@@ -11,7 +12,6 @@ import {
   vi,
 } from "vitest";
 import type { VehicleFormState } from "@/app/(authenticated)/vehicles/actions";
-import { Toaster } from "@/components/ui/sonner";
 import { VehicleForm } from "@/components/vehicle-form";
 import { sendBrowserToLogin } from "@/lib/login";
 import { server } from "@/test/server";
@@ -124,15 +124,12 @@ function renderForm(
   const user = userEvent.setup();
 
   render(
-    <>
-      <Toaster />
-      <VehicleForm
-        action={action}
-        defaultValues={emptyValues}
-        submitLabel="Add vehicle"
-        cancelHref="/vehicles"
-      />
-    </>,
+    <VehicleForm
+      action={action}
+      defaultValues={emptyValues}
+      submitLabel="Add vehicle"
+      cancelHref="/vehicles"
+    />,
   );
 
   return { user, action };
@@ -272,11 +269,9 @@ describe("VehicleForm wizard", () => {
         selector: "form [role=alert] *",
       }),
     ).toBeInTheDocument();
-    expect(
-      await screen.findByText("Something went wrong. Please try again.", {
-        selector: "[data-sonner-toast] *",
-      }),
-    ).toBeInTheDocument();
+    expect(toast.error).toHaveBeenCalledWith(
+      "Something went wrong. Please try again.",
+    );
     expect(screen.getByText("Step 2 of 2")).toBeInTheDocument();
   });
 
