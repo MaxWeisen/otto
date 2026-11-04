@@ -2,7 +2,11 @@
 
 import { useState } from "react";
 import { PencilSimpleIcon } from "@phosphor-icons/react";
-import type { VehicleFormState } from "@/app/(authenticated)/vehicles/actions";
+import type {
+  DeleteVehicleState,
+  VehicleFormState,
+} from "@/app/(authenticated)/vehicles/actions";
+import { DeleteVehicleDialog } from "@/components/delete-vehicle-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -25,18 +29,23 @@ type VehicleDetailsCardProps = {
     state: VehicleFormState,
     formData: FormData,
   ) => Promise<VehicleFormState>;
+  /** Deletes the vehicle and leaves its page. */
+  deleteAction: () => Promise<DeleteVehicleState>;
 };
 
 /**
  * A vehicle's details, which the edit button turns into a form in place.
- * Leaving the form returns focus to the edit button.
+ * Leaving the form returns focus to the edit button. The form's Delete button
+ * asks for confirmation before deleting the vehicle.
  */
 export function VehicleDetailsCard({
   vehicle,
   action,
+  deleteAction,
 }: VehicleDetailsCardProps) {
   const [editing, setEditing] = useState(false);
   const [hasEdited, setHasEdited] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   function stopEditing() {
     setEditing(false);
@@ -44,13 +53,24 @@ export function VehicleDetailsCard({
   }
 
   if (editing) {
+    // The dialog sits beside the form rather than inside it, so its keys and
+    // clicks do not reach the form's Escape and submit handling.
     return (
-      <VehicleEditForm
-        action={action}
-        defaultValues={vehicleFormValues(vehicle)}
-        onCancel={stopEditing}
-        onSaved={stopEditing}
-      />
+      <>
+        <VehicleEditForm
+          action={action}
+          defaultValues={vehicleFormValues(vehicle)}
+          onCancel={stopEditing}
+          onSaved={stopEditing}
+          onDelete={() => setConfirmingDelete(true)}
+        />
+        <DeleteVehicleDialog
+          vehicle={vehicle}
+          open={confirmingDelete}
+          onOpenChange={setConfirmingDelete}
+          action={deleteAction}
+        />
+      </>
     );
   }
 

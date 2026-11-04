@@ -15,8 +15,15 @@ export type Vehicle = {
   mileage: number | null;
 };
 
-export type MutationResult<T> =
-  { ok: true; data: T } | { ok: false; status: number; error: string };
+export type MutationResult<T> = { ok: true; data: T } | MutationFailure;
+
+export type MutationFailure = { ok: false; status: number; error: string };
+
+const UNREACHABLE_FAILURE: MutationFailure = {
+  ok: false,
+  status: 502,
+  error: "Could not reach the server. Please try again.",
+};
 
 export async function listVehicles(): Promise<Vehicle[]> {
   const response = await apiFetch("/api/vehicles");
@@ -71,9 +78,7 @@ export async function updateVehicle(
   id: number,
   input: VehicleInput,
 ): Promise<MutationResult<Vehicle>> {
-  if (!Number.isSafeInteger(id) || id < 1) {
-    notFound();
-  }
+  assertVehicleId(id);
 
   const result = await sendVehicle(`/api/vehicles/${id}`, "PUT", input);
 
@@ -82,6 +87,48 @@ export async function updateVehicle(
   }
 
   return result;
+}
+
+/**
+ * Deletes one of the visitor's vehicles along with its maintenance records.
+ * Like updateVehicle, an id that is not a vehicle id, or a vehicle that does
+ * not exist or belongs to someone else, shows the not-found page.
+ */
+export async function deleteVehicle(
+  id: number,
+): Promise<{ ok: true } | MutationFailure> {
+  assertVehicleId(id);
+
+  let response: Response;
+
+  try {
+    response = await apiFetch(`/api/vehicles/${id}`, { method: "DELETE" });
+  } catch (error) {
+    unstable_rethrow(error);
+
+    return UNREACHABLE_FAILURE;
+  }
+
+  if (response.status === 404) {
+    notFound();
+  }
+
+  if (response.status !== 204) {
+    return {
+      ok: false,
+      status: response.status,
+      error: await readApiError(response),
+    };
+  }
+
+  return { ok: true };
+}
+
+/** Shows the not-found page for an id from the browser that is not a number. */
+function assertVehicleId(id: number) {
+  if (!Number.isSafeInteger(id) || id < 1) {
+    notFound();
+  }
 }
 
 async function sendVehicle(
@@ -100,11 +147,7 @@ async function sendVehicle(
   } catch (error) {
     unstable_rethrow(error);
 
-    return {
-      ok: false,
-      status: 502,
-      error: "Could not reach the server. Please try again.",
-    };
+    return UNREACHABLE_FAILURE;
   }
 
   if (!response.ok) {

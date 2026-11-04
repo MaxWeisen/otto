@@ -11,6 +11,7 @@ import {
 } from "@/lib/vehicle-schema";
 import {
   createVehicle,
+  deleteVehicle,
   updateVehicle,
   type MutationResult,
   type Vehicle,
@@ -84,4 +85,24 @@ export async function updateVehicleAction(
   revalidatePath("/vehicles");
 
   return { values, saved: true };
+}
+
+export type DeleteVehicleState = { message?: string };
+
+/**
+ * Deletes one of the visitor's vehicles with its maintenance records and
+ * returns to the vehicle list. A vehicle that does not exist or belongs to
+ * someone else shows the not-found page.
+ */
+export async function deleteVehicleAction(
+  id: number,
+): Promise<DeleteVehicleState> {
+  const result = await deleteVehicle(id);
+
+  if (!result.ok) {
+    return { message: result.error };
+  }
+
+  revalidatePath("/vehicles");
+  redirect("/vehicles?status=deleted");
 }
