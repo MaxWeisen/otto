@@ -4,6 +4,7 @@ import {
   readVehicleFormValues,
   validateVehicleFields,
   validateVehicleForm,
+  vehicleApiErrors,
   vinError,
   type VehicleFormValues,
 } from "@/lib/vehicle-schema";
@@ -201,6 +202,29 @@ describe("vinError", () => {
 describe("maxVehicleYear", () => {
   it("is next year", () => {
     expect(maxVehicleYear()).toBe(2027);
+  });
+});
+
+describe("vehicleApiErrors", () => {
+  it.each([
+    [
+      "Year must be between 1886 and 2027",
+      "year",
+      "Year must be between 1886 and 2027",
+    ],
+    ["make is required", "make", "Make is required"],
+    ["Vin must be 17 characters", "vin", "VIN must be 17 characters"],
+    ["mileage must not be negative", "mileage", "Mileage must not be negative"],
+  ])("maps %j to the %s field", (message, field, error) => {
+    expect(vehicleApiErrors(message)).toEqual({ errors: { [field]: [error] } });
+  });
+
+  it.each([
+    "Request body must be a single JSON object",
+    "Something went wrong. Please try again.",
+    "Vehicle",
+  ])("keeps %j as a message for the whole form", (message) => {
+    expect(vehicleApiErrors(message)).toEqual({ message });
   });
 });
 

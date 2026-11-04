@@ -1,19 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useState } from "react";
 import { flushSync } from "react-dom";
-import { toast } from "sonner";
 import {
-  ArrowClockwiseIcon,
   ArrowLeftIcon,
   ArrowRightIcon,
-  CheckCircleIcon,
   SpinnerIcon,
-  WarningCircleIcon,
 } from "@phosphor-icons/react";
 import type { VehicleFormState } from "@/app/(authenticated)/vehicles/actions";
-import { OptionCombobox, OTHER_OPTION } from "@/components/option-combobox";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -23,37 +18,26 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { FieldGroup } from "@/components/ui/field";
 import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { useVehicleModels } from "@/hooks/use-vehicle-models";
+  focusVehicleField,
+  FormAlert,
+  MakeField,
+  ModelField,
+  useVehicleFields,
+  VehicleTextField,
+  VinDecodeField,
+} from "@/components/vehicle-fields";
 import { cn } from "@/lib/utils";
-import { findVehicleMake, VEHICLE_MAKES } from "@/lib/vehicle-makes";
 import {
   MAX_TEXT_LENGTH,
   readVehicleFormValues,
   validateVehicleFields,
   validateVehicleForm,
   VEHICLE_FORM_STEPS,
-  vinError,
-  VIN_LENGTH,
   type VehicleField,
-  type VehicleFieldErrors,
   type VehicleFormValues,
 } from "@/lib/vehicle-schema";
-import {
-  cachedVehicleModels,
-  decodeVin,
-  loadVehicleModels,
-  type DecodedVin,
-} from "@/lib/vpic-client";
-
-const OTHER_LABEL = "Other / not listed";
 
 const STEP_HEADINGS = [
   {
@@ -82,10 +66,7 @@ function stepOf(field: VehicleField): number {
   );
 }
 
-function firstInvalidField(errors: VehicleFieldErrors) {
-  return VEHICLE_FORM_STEPS.flat().find((field) => errors[field]);
-}
-
+/** The add-vehicle wizard, which collects a vehicle's fields in two steps. */
 export function VehicleForm({
   action,
   defaultValues,
@@ -96,209 +77,17 @@ export function VehicleForm({
     values: defaultValues,
   });
   const [step, setStep] = useState(0);
-  const [values, setValues] = useState(defaultValues);
-  const [makeOther, setMakeOther] = useState(
-    () => defaultValues.make !== "" && !findVehicleMake(defaultValues.make),
-  );
-  const [modelOther, setModelOther] = useState(false);
-  const [focusOther, setFocusOther] = useState<"make" | "model" | null>(null);
-  const [clientErrors, setClientErrors] = useState<VehicleFieldErrors | null>(
-    null,
-  );
-  const [editedFields, setEditedFields] = useState<ReadonlySet<string>>(
-    new Set(),
-  );
-  const [handledState, setHandledState] = useState(state);
-  const latestValues = useRef(values);
-
-  useEffect(() => {
-    latestValues.current = values;
-  }, [values]);
-
-  // A new server response replaces any client-side errors and returns the
-  // wizard to the first step that has a problem.
-  if (state !== handledState) {
-    setHandledState(state);
-    setClientErrors(null);
-    setEditedFields(new Set());
-
-    const invalid = state.errors && firstInvalidField(state.errors);
-
-    if (invalid) {
-      setStep(stepOf(invalid));
-    }
-  }
-
-  useEffect(() => {
-    if (state.message) {
-      toast.error(state.message);
-    }
-  }, [state]);
-
-  const listedMake = makeOther ? null : (findVehicleMake(values.make) ?? null);
-  const lookupYear = validateVehicleFields(values, ["year"])
-    ? null
-    : Number(values.year);
-  const modelsState = useVehicleModels(listedMake, lookupYear);
-  const modelOptions = modelsState.status === "ready" ? modelsState.models : [];
-
-  // A model picked from the list no longer fits once the year or make
-  // changes to one whose list does not include it.
-  if (
-    modelOptions.length > 0 &&
-    !modelOther &&
-    values.model !== "" &&
-    !modelOptions.includes(values.model)
-  ) {
-    setValues({ ...values, model: "" });
-  }
-
-  const errors = clientErrors ?? state.errors ?? {};
-  const errorFor = (field: VehicleField) =>
-    editedFields.has(field) ? undefined : errors[field]?.[0];
-
-  function markEdited(...fields: VehicleField[]) {
-    setEditedFields((current) => new Set([...current, ...fields]));
-  }
-
-  function setField(field: VehicleField, value: string) {
-    setValues((current) => ({ ...current, [field]: value }));
-    markEdited(field);
-  }
-
-  function selectMake(next: string | null, typedText: string) {
-    const isOther = next === OTHER_OPTION;
-
-    setMakeOther(isOther);
-    setModelOther(false);
-    setFocusOther(isOther ? "make" : null);
-    setValues((current) => ({
-      ...current,
-      make: isOther ? typedText : (next ?? ""),
-      model: next === current.make ? current.model : "",
-    }));
-    markEdited("make");
-  }
-
-  function selectModel(next: string | null, typedText: string) {
-    const isOther = next === OTHER_OPTION;
-
-    setModelOther(isOther);
-    setFocusOther(isOther ? "model" : null);
-    setValues((current) => ({
-      ...current,
-      model: isOther ? typedText : (next ?? ""),
-    }));
-    markEdited("model");
-  }
-
-  /**
-   * Fills the form from a decoded VIN and returns a summary of what changed,
-   * or null when the decode is no longer current. Fields edited while the
-   * decode was in flight keep the visitor's value.
-   */
-  async function applyDecodedVin(
-    decoded: DecodedVin,
-    isCurrent: () => boolean,
-  ): Promise<string | null> {
-    const listed = decoded.make ? findVehicleMake(decoded.make) : undefined;
-    const makeName = listed ?? decoded.make;
-    const modelYear = decoded.year ?? lookupYear;
-    let loadedModels: readonly string[] | undefined;
-
-    if (listed && modelYear && decoded.model) {
-      try {
-        loadedModels = await loadVehicleModels(listed, modelYear);
-      } catch {
-        // The decoded model stays as free text when the list cannot load.
-      }
-    }
-
-    if (!isCurrent()) {
-      return null;
-    }
-
-    const current = latestValues.current;
-    const unchanged = (field: VehicleField) => current[field] === values[field];
-    const updates: Partial<VehicleFormValues> = { vin: decoded.vin };
-
-    if (decoded.year && unchanged("year")) {
-      updates.year = String(decoded.year);
-    }
-
-    // The model only counts as listed when it is in the list for the year
-    // that ends up in the form.
-    const formYear = updates.year ?? current.year;
-    const finalYear = validateVehicleFields({ ...current, year: formYear }, [
-      "year",
-    ])
-      ? null
-      : Number(formYear);
-    const yearModels =
-      finalYear === modelYear
-        ? loadedModels
-        : listed && finalYear
-          ? cachedVehicleModels(listed, finalYear)
-          : undefined;
-    const match = yearModels?.find(
-      (option) => option.toLowerCase() === decoded.model?.toLowerCase(),
-    );
-    const model = match ?? decoded.model;
-    const isModelOther = !match;
-
-    if (makeName && unchanged("make")) {
-      updates.make = makeName;
-      setMakeOther(!listed);
-    }
-
-    const nextModel = model ?? (decoded.make ? "" : null);
-
-    if (nextModel !== null && unchanged("make") && unchanged("model")) {
-      updates.model = nextModel;
-      setModelOther(nextModel !== "" && isModelOther);
-    }
-
-    if (decoded.trim && unchanged("make") && unchanged("trim")) {
-      updates.trim = decoded.trim;
-    }
-
-    setFocusOther(null);
-    setValues((latest) => ({ ...latest, ...updates }));
-    markEdited(...(Object.keys(updates) as VehicleField[]));
-
-    return [updates.year, updates.make, updates.model, updates.trim]
-      .filter(Boolean)
-      .join(" ");
-  }
-
-  function focusField(field: VehicleField) {
-    const input =
-      document.getElementById(`vehicle-${field}-other`) ??
-      document.getElementById(`vehicle-${field}`);
-
-    input?.focus();
-  }
-
-  function showErrors(fieldErrors: VehicleFieldErrors) {
-    const invalid = firstInvalidField(fieldErrors);
-
-    flushSync(() => {
-      setClientErrors(fieldErrors);
-      setEditedFields(new Set());
-
-      if (invalid) {
-        setStep(stepOf(invalid));
-      }
-    });
-
-    if (invalid) {
-      focusField(invalid);
-    }
-  }
+  // A field error returns the wizard to the first step that has a problem.
+  const fields = useVehicleFields({
+    defaultValues,
+    state,
+    fieldOrder: VEHICLE_FORM_STEPS.flat(),
+    onInvalidField: (field) => setStep(stepOf(field)),
+  });
 
   function goToStep(nextStep: number) {
     flushSync(() => setStep(nextStep));
-    focusField(VEHICLE_FORM_STEPS[nextStep][0]);
+    focusVehicleField(VEHICLE_FORM_STEPS[nextStep][0]);
   }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -313,11 +102,11 @@ export function VehicleForm({
       );
 
       if (stepErrors) {
-        showErrors(stepErrors);
+        fields.showErrors(stepErrors);
         return;
       }
 
-      setClientErrors(null);
+      fields.clearErrors();
       goToStep(step + 1);
       return;
     }
@@ -326,25 +115,15 @@ export function VehicleForm({
 
     if (!validation.success) {
       event.preventDefault();
-      showErrors(validation.errors);
+      fields.showErrors(validation.errors);
       return;
     }
 
-    setClientErrors(null);
-    setEditedFields(new Set());
+    fields.clearErrors();
   }
 
-  const textFieldProps = (field: VehicleField) => ({
-    name: field,
-    value: values[field],
-    onChange: (event: React.ChangeEvent<HTMLInputElement>) =>
-      setField(field, event.target.value),
-    error: errorFor(field),
-  });
-
+  const { textFieldProps } = fields;
   const isLastStep = step === VEHICLE_FORM_STEPS.length - 1;
-  const makeError = errorFor("make");
-  const modelError = errorFor("model");
 
   return (
     <form
@@ -381,12 +160,7 @@ export function VehicleForm({
         </CardHeader>
         <CardContent>
           <FieldGroup hidden={step !== 0}>
-            <VinField
-              value={values.vin}
-              onChange={(value) => setField("vin", value)}
-              error={errorFor("vin")}
-              onDecoded={applyDecodedVin}
-            />
+            <VinDecodeField fields={fields} />
             <div className="grid gap-5 sm:grid-cols-[7rem_minmax(0,1fr)]">
               <VehicleTextField
                 label="Year"
@@ -396,62 +170,10 @@ export function VehicleForm({
                 required
                 {...textFieldProps("year")}
               />
-              <Field data-invalid={makeError ? true : undefined}>
-                <FieldLabel htmlFor="vehicle-make">Make</FieldLabel>
-                <OptionCombobox
-                  id="vehicle-make"
-                  options={VEHICLE_MAKES}
-                  value={makeOther ? OTHER_OPTION : listedMake}
-                  onSelect={selectMake}
-                  onType={() => markEdited("make")}
-                  otherLabel={OTHER_LABEL}
-                  placeholder="Search makes"
-                  invalid={!!makeError && !makeOther}
-                  describedBy={
-                    makeError && !makeOther ? "vehicle-make-error" : undefined
-                  }
-                />
-                {makeOther ? (
-                  <OtherTextInput
-                    field="make"
-                    label="Make name"
-                    placeholder="Enter the make"
-                    value={values.make}
-                    onChange={(value) => setField("make", value)}
-                    autoFocus={focusOther === "make"}
-                    error={makeError}
-                  />
-                ) : (
-                  <input
-                    type="hidden"
-                    name="make"
-                    value={listedMake ?? ""}
-                  />
-                )}
-                {makeError && (
-                  <FieldError id="vehicle-make-error">{makeError}</FieldError>
-                )}
-              </Field>
+              <MakeField fields={fields} />
             </div>
             <div className="grid gap-5 sm:grid-cols-2">
-              <ModelField
-                state={modelsState}
-                options={modelOptions}
-                makeName={listedMake}
-                year={lookupYear}
-                makeOther={makeOther}
-                modelOther={modelOther}
-                value={values.model}
-                onSelect={selectModel}
-                onType={() => markEdited("model")}
-                onChange={(value) => setField("model", value)}
-                onFreeTextChange={(value) => {
-                  setModelOther(value !== "");
-                  setField("model", value);
-                }}
-                autoFocusOther={focusOther === "model"}
-                error={modelError}
-              />
+              <ModelField fields={fields} />
               <VehicleTextField
                 label="Trim"
                 placeholder="e.g. EX-L"
@@ -477,13 +199,10 @@ export function VehicleForm({
             </div>
           </FieldGroup>
           {state.message && isLastStep && (
-            <div
-              role="alert"
-              className="mt-5 flex items-start gap-2 border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive"
-            >
-              <WarningCircleIcon className="mt-px size-4 shrink-0" />
-              <span>{state.message}</span>
-            </div>
+            <FormAlert
+              message={state.message}
+              className="mt-5"
+            />
           )}
         </CardContent>
         <CardFooter className="justify-between gap-2">
@@ -534,398 +253,5 @@ export function VehicleForm({
         </CardFooter>
       </Card>
     </form>
-  );
-}
-
-type ModelFieldProps = {
-  state: ReturnType<typeof useVehicleModels>;
-  options: readonly string[];
-  makeName: string | null;
-  year: number | null;
-  makeOther: boolean;
-  modelOther: boolean;
-  value: string;
-  onSelect: (value: string | null, typedText: string) => void;
-  onType: () => void;
-  onChange: (value: string) => void;
-  onFreeTextChange: (value: string) => void;
-  autoFocusOther: boolean;
-  error?: string;
-};
-
-/**
- * The model picker. It lists the models NHTSA knows for the chosen make and
- * year, and falls back to free text whenever that list is unavailable.
- */
-function ModelField({
-  state,
-  options,
-  makeName,
-  year,
-  makeOther,
-  modelOther,
-  value,
-  onSelect,
-  onType,
-  onChange,
-  onFreeTextChange,
-  autoFocusOther,
-  error,
-}: ModelFieldProps) {
-  const errorId = error ? "vehicle-model-error" : undefined;
-  const hasList = state.status === "ready" && options.length > 0;
-  const freeText =
-    makeOther ||
-    state.status === "error" ||
-    (state.status === "ready" && !hasList);
-
-  let note: string | undefined;
-
-  if (state.status === "error") {
-    note = "Couldn't load models from NHTSA. Type the model instead.";
-  } else if (state.status === "ready" && !hasList) {
-    note = `NHTSA lists no ${makeName} models for ${year}. Type the model instead.`;
-  }
-
-  let placeholder = "Search models";
-
-  if (!makeName) {
-    placeholder = "Choose a make first";
-  } else if (!year) {
-    placeholder = "Enter the year first";
-  } else if (state.status === "loading") {
-    placeholder = "Loading models...";
-  }
-
-  return (
-    <Field data-invalid={error ? true : undefined}>
-      <FieldLabel htmlFor={freeText ? "vehicle-model-other" : "vehicle-model"}>
-        Model
-        {state.status === "loading" && (
-          <SpinnerIcon
-            className="size-3 animate-spin text-muted-foreground"
-            aria-hidden
-          />
-        )}
-      </FieldLabel>
-      {freeText ? (
-        <Input
-          id="vehicle-model-other"
-          name="model"
-          value={value}
-          onChange={(event) => onFreeTextChange(event.target.value)}
-          autoComplete="off"
-          maxLength={MAX_TEXT_LENGTH}
-          placeholder="e.g. Civic"
-          aria-required
-          aria-invalid={error ? true : undefined}
-          aria-describedby={errorId}
-        />
-      ) : (
-        <>
-          <OptionCombobox
-            id="vehicle-model"
-            options={options}
-            value={modelOther ? OTHER_OPTION : value || null}
-            onSelect={onSelect}
-            onType={onType}
-            otherLabel={OTHER_LABEL}
-            placeholder={placeholder}
-            disabled={!hasList}
-            invalid={!!error && !modelOther}
-            describedBy={!modelOther ? errorId : undefined}
-          />
-          {modelOther ? (
-            <OtherTextInput
-              field="model"
-              label="Model name"
-              placeholder="Enter the model"
-              value={value}
-              onChange={onChange}
-              autoFocus={autoFocusOther}
-              error={error}
-            />
-          ) : (
-            <input
-              type="hidden"
-              name="model"
-              value={hasList && options.includes(value) ? value : ""}
-            />
-          )}
-        </>
-      )}
-      {state.status === "error" ? (
-        <div className="flex items-center justify-between gap-2">
-          {error ? (
-            <FieldError id="vehicle-model-error">{error}</FieldError>
-          ) : (
-            <FieldDescription>{note}</FieldDescription>
-          )}
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            className="text-foreground"
-            onClick={state.retry}
-          >
-            <ArrowClockwiseIcon data-icon="inline-start" />
-            Retry
-          </Button>
-        </div>
-      ) : error ? (
-        <FieldError id="vehicle-model-error">{error}</FieldError>
-      ) : (
-        note && <FieldDescription>{note}</FieldDescription>
-      )}
-    </Field>
-  );
-}
-
-function OtherTextInput({
-  field,
-  label,
-  placeholder,
-  value,
-  onChange,
-  autoFocus,
-  error,
-}: {
-  field: "make" | "model";
-  label: string;
-  placeholder: string;
-  value: string;
-  onChange: (value: string) => void;
-  autoFocus: boolean;
-  error?: string;
-}) {
-  return (
-    <Input
-      id={`vehicle-${field}-other`}
-      name={field}
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      autoFocus={autoFocus}
-      autoComplete="off"
-      maxLength={MAX_TEXT_LENGTH}
-      placeholder={placeholder}
-      aria-label={label}
-      aria-required
-      aria-invalid={error ? true : undefined}
-      aria-describedby={error ? `vehicle-${field}-error` : undefined}
-    />
-  );
-}
-
-type DecodeStatus =
-  | { status: "idle" }
-  | { status: "decoding" }
-  | { status: "error"; message: string }
-  | { status: "decoded"; summary: string };
-
-/**
- * The vehicle's VIN. It is optional and saved as entered, and decoding it
- * fills in the rest of step 1.
- */
-function VinField({
-  value,
-  onChange,
-  error,
-  onDecoded,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  error?: string;
-  onDecoded: (
-    decoded: DecodedVin,
-    isCurrent: () => boolean,
-  ) => Promise<string | null>;
-}) {
-  const [decode, setDecode] = useState<DecodeStatus>({ status: "idle" });
-  const decodeRequest = useRef(0);
-
-  async function handleDecode() {
-    const request = ++decodeRequest.current;
-    const isCurrent = () => decodeRequest.current === request;
-    const normalized = value.trim().toUpperCase();
-
-    if (!normalized) {
-      setDecode({ status: "error", message: "Enter a VIN to decode" });
-      return;
-    }
-
-    const invalidVin = vinError(normalized);
-
-    if (invalidVin) {
-      setDecode({ status: "error", message: invalidVin });
-      return;
-    }
-
-    setDecode({ status: "decoding" });
-
-    try {
-      const summary = await onDecoded(await decodeVin(normalized), isCurrent);
-
-      if (summary !== null && isCurrent()) {
-        setDecode({ status: "decoded", summary });
-      }
-    } catch (decodeError) {
-      if (!isCurrent()) {
-        return;
-      }
-
-      setDecode({
-        status: "error",
-        message:
-          decodeError instanceof Error
-            ? decodeError.message
-            : "Something went wrong. Please try again.",
-      });
-    }
-  }
-
-  function changeVin(next: string) {
-    decodeRequest.current += 1;
-    onChange(next.replace(/\s/g, "").toUpperCase().slice(0, VIN_LENGTH));
-    setDecode({ status: "idle" });
-  }
-
-  const decoding = decode.status === "decoding";
-  const errorMessage = decode.status === "error" ? decode.message : error;
-
-  return (
-    <Field
-      data-invalid={errorMessage ? true : undefined}
-      className="border border-dashed p-3"
-    >
-      <FieldLabel htmlFor="vehicle-vin">
-        VIN
-        <span className="font-normal text-muted-foreground">(optional)</span>
-      </FieldLabel>
-      <FieldDescription id="vehicle-vin-description">
-        Saved with the vehicle. Decode it to fill in the year, make, model and
-        trim for you.
-      </FieldDescription>
-      <div className="flex gap-2">
-        <Input
-          id="vehicle-vin"
-          name="vin"
-          value={value}
-          onChange={(event) => changeVin(event.target.value)}
-          onPaste={(event) => {
-            const input = event.currentTarget;
-            const start = input.selectionStart ?? input.value.length;
-            const end = input.selectionEnd ?? start;
-
-            event.preventDefault();
-            changeVin(
-              input.value.slice(0, start) +
-                event.clipboardData.getData("text") +
-                input.value.slice(end),
-            );
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              void handleDecode();
-            }
-          }}
-          autoComplete="off"
-          spellCheck={false}
-          maxLength={VIN_LENGTH}
-          placeholder={`${VIN_LENGTH} characters, e.g. 1HGCM82633A004352`}
-          className="uppercase placeholder:normal-case"
-          aria-invalid={errorMessage ? true : undefined}
-          aria-describedby="vehicle-vin-description vehicle-vin-status"
-        />
-        <Button
-          type="button"
-          variant="outline"
-          className="text-foreground"
-          onClick={() => void handleDecode()}
-          disabled={decoding}
-        >
-          {decoding && (
-            <SpinnerIcon
-              data-icon="inline-start"
-              className="animate-spin"
-            />
-          )}
-          Decode
-        </Button>
-      </div>
-      <div
-        id="vehicle-vin-status"
-        aria-live="polite"
-      >
-        {errorMessage && <FieldError>{errorMessage}</FieldError>}
-        {decode.status === "decoded" && (
-          <p className="flex items-start gap-1.5 text-xs/relaxed text-muted-foreground">
-            <CheckCircleIcon className="mt-0.5 size-3.5 shrink-0 text-foreground" />
-            {decode.summary ? (
-              <span>
-                Filled in{" "}
-                <span className="font-medium text-foreground">
-                  {decode.summary}
-                </span>
-                . Check the details below and edit anything that is off.
-              </span>
-            ) : (
-              <span>Decoded. No details were filled in from this VIN.</span>
-            )}
-          </p>
-        )}
-      </div>
-    </Field>
-  );
-}
-
-type VehicleTextFieldProps = Omit<
-  React.ComponentProps<typeof Input>,
-  "name" | "id"
-> & {
-  name: VehicleField;
-  label: string;
-  description?: string;
-  error?: string;
-};
-
-function VehicleTextField({
-  name,
-  label,
-  description,
-  error,
-  required,
-  ...inputProps
-}: VehicleTextFieldProps) {
-  const id = `vehicle-${name}`;
-  const errorId = `${id}-error`;
-  const descriptionId = `${id}-description`;
-  const describedBy = error ? errorId : description ? descriptionId : undefined;
-
-  return (
-    <Field data-invalid={error ? true : undefined}>
-      <FieldLabel htmlFor={id}>
-        {label}
-        {!required && (
-          <span className="font-normal text-muted-foreground">(optional)</span>
-        )}
-      </FieldLabel>
-      <Input
-        id={id}
-        name={name}
-        autoComplete="off"
-        aria-required={required || undefined}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={describedBy}
-        {...inputProps}
-      />
-      {error ? (
-        <FieldError id={errorId}>{error}</FieldError>
-      ) : (
-        description && (
-          <FieldDescription id={descriptionId}>{description}</FieldDescription>
-        )
-      )}
-    </Field>
   );
 }
