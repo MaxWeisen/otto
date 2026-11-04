@@ -404,7 +404,6 @@ describe("Deleting from the edit form", () => {
   const deleteButton = () => screen.getByRole("button", { name: "Delete" });
   const dialog = () => screen.queryByRole("alertdialog");
 
-  /** Opens the confirmation and waits for it to take focus. */
   async function openConfirmation(user: ReturnType<typeof userEvent.setup>) {
     await user.click(deleteButton());
     await waitFor(() =>

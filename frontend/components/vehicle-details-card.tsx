@@ -29,14 +29,12 @@ type VehicleDetailsCardProps = {
     state: VehicleFormState,
     formData: FormData,
   ) => Promise<VehicleFormState>;
-  /** Deletes the vehicle and leaves its page. */
   deleteAction: () => Promise<DeleteVehicleState>;
 };
 
 /**
  * A vehicle's details, which the edit button turns into a form in place.
- * Leaving the form returns focus to the edit button. The form's Delete button
- * asks for confirmation before deleting the vehicle.
+ * Leaving the form returns focus to the edit button.
  */
 export function VehicleDetailsCard({
   vehicle,
@@ -53,8 +51,6 @@ export function VehicleDetailsCard({
   }
 
   if (editing) {
-    // The dialog sits beside the form rather than inside it, so its keys and
-    // clicks do not reach the form's Escape and submit handling.
     return (
       <>
         <VehicleEditForm

@@ -89,11 +89,6 @@ export async function updateVehicle(
   return result;
 }
 
-/**
- * Deletes one of the visitor's vehicles along with its maintenance records.
- * Like updateVehicle, an id that is not a vehicle id, or a vehicle that does
- * not exist or belongs to someone else, shows the not-found page.
- */
 export async function deleteVehicle(
   id: number,
 ): Promise<{ ok: true } | MutationFailure> {
@@ -124,7 +119,6 @@ export async function deleteVehicle(
   return { ok: true };
 }
 
-/** Shows the not-found page for an id from the browser that is not a number. */
 function assertVehicleId(id: number) {
   if (!Number.isSafeInteger(id) || id < 1) {
     notFound();

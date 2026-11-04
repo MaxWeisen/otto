@@ -79,8 +79,6 @@ test("cannot delete another user's vehicle with a crafted request", async ({
   await insertMaintenanceRecord(otherId);
   let craftedRequests = 0;
 
-  // Point the delete's bound vehicle id at the other user's vehicle, as a
-  // tampered request from this browser would.
   await page.route(`**/vehicles/${ownId}`, async (route) => {
     const request = route.request();
     const body = request.postData();

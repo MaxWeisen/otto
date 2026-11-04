@@ -65,7 +65,6 @@ type VehicleEditFormProps = {
   defaultValues: VehicleFormValues;
   onCancel: () => void;
   onSaved: () => void;
-  /** Asks to delete the vehicle. */
   onDelete: () => void;
 };
 

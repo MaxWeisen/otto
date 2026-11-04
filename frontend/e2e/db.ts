@@ -142,7 +142,6 @@ function removeUsers(condition: string, params: string[]): Promise<void> {
   });
 }
 
-/** Adds a maintenance record to a vehicle, whoever owns it. */
 export function insertMaintenanceRecord(vehicleId: number): Promise<void> {
   return withDb(async (db) => {
     await db.query(
@@ -154,7 +153,6 @@ export function insertMaintenanceRecord(vehicleId: number): Promise<void> {
   });
 }
 
-/** Counts a vehicle's maintenance records, whoever owns it. */
 export function countMaintenanceRecords(vehicleId: number): Promise<number> {
   return withDb(async (db) => {
     const { rows } = await db.query<{ count: string }>(

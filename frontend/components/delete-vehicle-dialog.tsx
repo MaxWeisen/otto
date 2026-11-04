@@ -22,15 +22,9 @@ type DeleteVehicleDialogProps = {
   vehicle: Vehicle;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Deletes the vehicle and leaves the page once it is gone. */
   action: () => Promise<DeleteVehicleState>;
 };
 
-/**
- * Asks for confirmation before deleting a vehicle. While the delete runs the
- * dialog stays open and cannot be dismissed; a failure is shown in the dialog
- * and as a toast so it can be retried or cancelled.
- */
 export function DeleteVehicleDialog({
   vehicle,
   open,
@@ -54,15 +48,14 @@ export function DeleteVehicleDialog({
       }
 
       if (failure) {
-        // Shown together with the buttons becoming usable again.
+        // A nested transition so the message commits with pending turning false.
         startTransition(() => setMessage(failure));
         toast.error(failure);
       }
     });
   }
 
-  // The confirm button is disabled while deleting, so it can only take focus
-  // back once a failed delete has finished.
+  // The confirm button is still disabled when the failure is set.
   useEffect(() => {
     if (message) {
       confirmButton.current?.focus();

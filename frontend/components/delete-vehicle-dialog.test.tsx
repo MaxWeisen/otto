@@ -45,7 +45,6 @@ function renderDialog(action: DeleteAction = vi.fn(async () => ({}))) {
   return { user, action, onOpenChange, setOpen };
 }
 
-/** Resolves the delete with the given result once finish is called. */
 function pendingDelete() {
   let finish: (state: DeleteVehicleState) => void = () => {};
   const action = vi.fn(
