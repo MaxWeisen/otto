@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useEffectEvent, useRef } from "react";
+import { useActionState, useEffectEvent, useLayoutEffect, useRef } from "react";
 import { toast } from "sonner";
 import { SpinnerIcon } from "@phosphor-icons/react";
 import type { VehicleFormState } from "@/app/(authenticated)/vehicles/actions";
@@ -88,7 +88,8 @@ export function VehicleEditForm({
   const saveButton = useRef<HTMLButtonElement>(null);
 
   // Focus follows the outcome of a save: back to read mode once it worked,
-  // otherwise to the first field with an error, or back to Save.
+  // otherwise to the first field with an error, or back to Save. It moves in
+  // the same commit that shows the outcome, before the browser paints.
   const handleResult = useEffectEvent((result: VehicleFormState) => {
     if (result.saved) {
       toast.success("Vehicle updated");
@@ -105,7 +106,7 @@ export function VehicleEditForm({
     }
   });
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     handleResult(state);
   }, [state]);
 

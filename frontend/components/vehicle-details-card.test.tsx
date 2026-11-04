@@ -340,8 +340,10 @@ describe("VehicleDetailsCard", () => {
         selector: "form [role=alert] *",
       }),
     ).toBeInTheDocument();
-    expect(toast.error).toHaveBeenCalledWith(
-      "Something went wrong. Please try again.",
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "Something went wrong. Please try again.",
+      ),
     );
     expect(form()).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save" })).toHaveFocus();

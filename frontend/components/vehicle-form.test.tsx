@@ -269,8 +269,10 @@ describe("VehicleForm wizard", () => {
         selector: "form [role=alert] *",
       }),
     ).toBeInTheDocument();
-    expect(toast.error).toHaveBeenCalledWith(
-      "Something went wrong. Please try again.",
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "Something went wrong. Please try again.",
+      ),
     );
     expect(screen.getByText("Step 2 of 2")).toBeInTheDocument();
   });
