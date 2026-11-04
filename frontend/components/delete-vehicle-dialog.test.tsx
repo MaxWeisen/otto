@@ -134,6 +134,30 @@ describe("DeleteVehicleDialog", () => {
     await waitFor(() => expect(confirmButton()).toBeEnabled());
   });
 
+  it("keeps a delete that could not reach the server in the dialog", async () => {
+    const { user, action } = renderDialog(
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      }),
+    );
+
+    await user.click(confirmButton());
+
+    expect(
+      await screen.findByText("Could not reach the server. Please try again.", {
+        selector: "[role=alert] *",
+      }),
+    ).toBeInTheDocument();
+    expect(toast.error).toHaveBeenCalledExactlyOnceWith(
+      "Could not reach the server. Please try again.",
+    );
+    expect(confirmButton()).toBeEnabled();
+
+    await user.click(confirmButton());
+
+    expect(action).toHaveBeenCalledTimes(2);
+  });
+
   it("forgets a failed delete once the dialog has closed", async () => {
     const { user, setOpen } = renderDialog(
       vi.fn(async () => ({ message: "Unable to delete vehicle" })),

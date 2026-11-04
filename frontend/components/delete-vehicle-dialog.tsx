@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { unstable_rethrow } from "next/navigation";
 import { toast } from "sonner";
 import { SpinnerIcon } from "@phosphor-icons/react";
 import type { DeleteVehicleState } from "@/app/(authenticated)/vehicles/actions";
@@ -43,11 +44,16 @@ export function DeleteVehicleDialog({
   function confirm() {
     setMessage(undefined);
     startTransition(async () => {
-      const result = await action();
+      let failure: string | undefined;
 
-      if (result.message) {
-        const failure = result.message;
+      try {
+        failure = (await action()).message;
+      } catch (error) {
+        unstable_rethrow(error);
+        failure = "Could not reach the server. Please try again.";
+      }
 
+      if (failure) {
         // Shown together with the buttons becoming usable again.
         startTransition(() => setMessage(failure));
         toast.error(failure);
