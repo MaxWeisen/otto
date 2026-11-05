@@ -17,10 +17,31 @@ const accord = {
   mileage: 182000,
 };
 
-function serveVehicle(status: number, body: JsonBodyType) {
+const oilChange = {
+  id: 31,
+  vehicle_id: 7,
+  type: "oil_change",
+  description: "Synthetic 5W-30 and filter",
+  performed_at: "2026-05-09",
+  mileage: 180500,
+  cost: "79.99",
+  notes: null,
+  created_at: "2026-05-09T17:00:00Z",
+};
+
+function serveVehicle(
+  status: number,
+  body: JsonBodyType,
+  records: JsonBodyType = [],
+) {
   server.use(
     http.get(`${API_URL}/api/vehicles/:id`, () =>
       HttpResponse.json(body, { status }),
+    ),
+    http.get(`${API_URL}/api/vehicles/:id/maintenance`, () =>
+      status === 200
+        ? HttpResponse.json(records)
+        : HttpResponse.json(body, { status }),
     ),
   );
 }
@@ -62,6 +83,26 @@ describe("VehiclePage", () => {
     }
 
     expect(detail("VIN")).toHaveClass("break-all");
+  });
+
+  it("lists the vehicle's maintenance below its details", async () => {
+    serveVehicle(200, accord, [oilChange]);
+
+    await renderPage("7");
+
+    expect(
+      screen.getByRole("heading", { name: "Maintenance" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Synthetic 5W-30 and filter")).toBeInTheDocument();
+    expect(screen.getByText("$79.99")).toBeInTheDocument();
+  });
+
+  it("shows the empty maintenance state for a vehicle without records", async () => {
+    serveVehicle(200, accord);
+
+    await renderPage("7");
+
+    expect(screen.getByText("No maintenance logged yet")).toBeInTheDocument();
   });
 
   it("links back to the vehicle list", async () => {

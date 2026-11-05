@@ -82,7 +82,7 @@ const year = z
       `Year must be between ${MIN_VEHICLE_YEAR} and ${maxVehicleYear()}`,
   });
 
-const mileage = z
+export const mileageSchema = z
   .string()
   .transform((value) => value.replace(/[\s,_]/g, ""))
   .refine((value) => value === "" || /^\d+$/.test(value), {
@@ -123,7 +123,7 @@ export const vehicleFormSchema = z.object({
   model: requiredText("Model"),
   trim: optionalText("Trim"),
   nickname: optionalText("Nickname"),
-  mileage,
+  mileage: mileageSchema,
   vin,
 });
 
