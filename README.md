@@ -145,3 +145,9 @@ cd frontend
 pnpm exec playwright install chromium
 pnpm test:e2e
 ```
+
+## License
+
+otto is licensed under the [Functional Source License, Version 1.1, ALv2 Future License](LICENSE) (FSL-1.1-ALv2).
+Each release converts to the Apache License, Version 2.0, two years after it is made available.
+See [fsl.software](https://fsl.software) for more about the license.

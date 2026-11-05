@@ -3,6 +3,7 @@
   "description": "Otto, your DIY automotive repar AI assistant",
   "version": "0.1.0",
   "private": true,
+  "license": "FSL-1.1-ALv2",
   "scripts": {
     "dev": "next dev -p 4000",
     "build": "next build",
