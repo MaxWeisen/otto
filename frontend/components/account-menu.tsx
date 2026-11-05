@@ -33,7 +33,7 @@ export function AccountMenu({ name, email, avatarUrl }: AccountMenuProps) {
           <Button
             variant="ghost"
             size="icon"
-            className="rounded-full duration-150 ease-out motion-safe:hover:-translate-y-0.5 hover:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_15%,transparent),0_0_18px_2px_color-mix(in_oklab,var(--color-primary)_45%,transparent)] motion-safe:focus-visible:-translate-y-0.5 focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_15%,transparent),0_0_18px_2px_color-mix(in_oklab,var(--color-primary)_45%,transparent)]"
+            className="rounded-full duration-150 ease-out motion-safe:hover:-translate-y-0.5 hover:shadow-glow motion-safe:focus-visible:-translate-y-0.5 focus-visible:shadow-glow"
           />
         }
         aria-label="Account menu"

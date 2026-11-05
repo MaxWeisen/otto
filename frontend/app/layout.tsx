@@ -7,8 +7,9 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 // toaster
 import { Toaster } from "@/components/ui/sonner";
-// theme provider
+// theme
 import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
@@ -54,8 +55,15 @@ export default function RootLayout({
           defaultTheme="system"
           enableSystem
         >
-          <Toaster />
+          {/* Lifts toasts clear of the theme toggle in the bottom-right corner. */}
+          <Toaster
+            offset={{ bottom: "calc(5.25rem + env(safe-area-inset-bottom))" }}
+            mobileOffset={{
+              bottom: "calc(4.75rem + env(safe-area-inset-bottom))",
+            }}
+          />
           {children}
+          <ThemeToggle />
         </ThemeProvider>
       </body>
     </html>
