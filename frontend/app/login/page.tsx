@@ -24,7 +24,11 @@ export default async function LoginPage({
   return (
     <main className="flex-1 flex flex-col items-center justify-center gap-2">
       {reason === "unauthorized" && (
-        <Toast message="Please log in to continue" type="error" clearParams />
+        <Toast
+          message="Please log in to continue"
+          type="error"
+          clearParams
+        />
       )}
       <h3>Sign in to Otto</h3>
       <Button

@@ -20,6 +20,7 @@ export default defineConfig({
     exclude: ["node_modules/**", ".next/**", "e2e/**"],
     env: {
       NEXT_PUBLIC_API_URL: "http://api.test",
+      TZ: "UTC",
     },
   },
 });

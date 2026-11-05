@@ -28,6 +28,7 @@ export const MAX_DESCRIPTION_LENGTH = 255;
 export const MAX_NOTES_LENGTH = 10000;
 export const MIN_PERFORMED_AT = `${MIN_VEHICLE_YEAR}-01-01`;
 const MAX_COST_WHOLE_DIGITS = 8;
+const MAX_UTC_OFFSET_MS = 14 * 60 * 60 * 1000;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const COST_PATTERN = /^(\d+)(?:\.(\d{1,2}))?$/;
 
@@ -66,6 +67,12 @@ export function today(): string {
   return `${now.getFullYear()}-${month}-${day}`;
 }
 
+// The latest calendar date that has started anywhere on Earth (UTC+14),
+// matching the backend's limit regardless of this machine's time zone.
+function latestStartedDate(): string {
+  return new Date(Date.now() + MAX_UTC_OFFSET_MS).toISOString().slice(0, 10);
+}
+
 function isCalendarDate(value: string): boolean {
   const date = new Date(`${value}T00:00:00Z`);
 
@@ -94,9 +101,7 @@ const type = z
   )
   .transform((value) => value as MaintenanceType);
 
-// Dates compare as YYYY-MM-DD strings. The visitor's today is never later
-// than the backend's limit, which accepts any date that has started
-// somewhere on Earth.
+// Dates compare as YYYY-MM-DD strings.
 const performedAt = z
   .string()
   .trim()
@@ -109,7 +114,7 @@ const performedAt = z
     error: `Date must not be before ${MIN_VEHICLE_YEAR}`,
     abort: true,
   })
-  .refine((value) => value <= today(), {
+  .refine((value) => value <= latestStartedDate(), {
     error: "Date must not be in the future",
   });
 
