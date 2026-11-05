@@ -386,8 +386,6 @@ function EditRecordDialog({
     if (result.saved) {
       toast.success("Maintenance record updated");
       onOpenChange(false);
-    } else if (result.message) {
-      toast.error(result.message);
     }
   });
 

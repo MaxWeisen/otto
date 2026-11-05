@@ -446,8 +446,6 @@ describe("MaintenanceSection", () => {
         "This maintenance record no longer exists.",
       ),
     ).toBeInTheDocument();
-    expect(toast.error).toHaveBeenCalledWith(
-      "This maintenance record no longer exists.",
-    );
+    expect(toast.error).not.toHaveBeenCalled();
   });
 });

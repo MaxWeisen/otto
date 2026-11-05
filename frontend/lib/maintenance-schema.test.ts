@@ -87,7 +87,7 @@ describe("validateMaintenanceForm", () => {
       "Date must not be before 1886",
     ],
     [
-      { performed_at: "2026-06-16" },
+      { performed_at: "2026-06-17" },
       "performed_at",
       "Date must not be in the future",
     ],
@@ -113,6 +113,11 @@ describe("validateMaintenanceForm", () => {
     expect(errorsFor({ performed_at: today(), cost: "0099999999.99" })).toEqual(
       {},
     );
+  });
+
+  it("accepts the day after the local today once it has started somewhere", () => {
+    expect(today()).toBe("2026-06-15");
+    expect(errorsFor({ performed_at: "2026-06-16" })).toEqual({});
   });
 });
 
