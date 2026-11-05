@@ -4,6 +4,86 @@ Knowledge is based on your car or truck's factory service manual.
 No guessing or hallucinations. 
 Only answers rooted in facts. 
 
+## Develop Locally
+
+### Prerequisites
+
+- Go 1.26.1 or newer, as pinned in `backend/go.mod`.
+- Node.js 20.9 or newer, the minimum for Next.js 16.
+- pnpm 9 or newer, since both lockfiles use lockfile version 9.
+- Docker with Compose, for Postgres.
+- [goose](https://github.com/pressly/goose) on the `PATH` for migrations: `go install github.com/pressly/goose/v3/cmd/goose@latest`.
+- A Google OAuth client, described below.
+
+### Install dependencies
+
+The root package only holds `concurrently`, which runs everything together; the frontend has its own install:
+
+```sh
+pnpm install
+cd frontend && pnpm install
+```
+
+### Database
+
+Start Postgres and apply the migrations in `backend/migrations` to `otto_db`:
+
+```sh
+docker compose up -d db
+goose -dir backend/migrations postgres 'postgres://dev_user:dev_password@localhost:5532/otto_db?sslmode=disable' up
+```
+
+Postgres listens on port 5532, and the user, password and database name come from `docker-compose.yml`.
+Run the goose command again whenever new migrations land.
+
+### Google OAuth client
+
+Sign-in only works with Google, so create an OAuth client in the [Google Cloud console](https://console.cloud.google.com/apis/credentials):
+
+1. Configure the OAuth consent screen and add your Google account as a test user.
+2. Create an OAuth client ID of type "Web application".
+3. Add `http://localhost:3333/auth/google/callback` as an authorized redirect URI.
+4. Copy the client ID and secret into `backend/.env`.
+
+### Backend environment
+
+The backend loads `backend/.env` when it starts, and variables already exported in the shell take precedence.
+Start from the committed example and fill in the OAuth client:
+
+```sh
+cp backend/.env.example backend/.env
+```
+
+- `DB_URL` (required) - Postgres connection string for `otto_db`.
+- `OAUTH_CLIENT_ID` and `OAUTH_CLIENT_SECRET` (required) - the Google OAuth client.
+- `OAUTH_REDIRECT_URL` (required) - `http://localhost:3333/auth/google/callback`, matching the redirect URI registered with Google.
+- `FRONTEND_URL` (required) - where the browser lands after signing in, `http://localhost:4000`.
+- `ENV` - set to `development` locally so cookies are not marked `Secure`, since local development runs on plain HTTP.
+- `PORT` - API port, defaults to `3333`.
+- `COOKIE_DOMAIN` - domain for the session cookie; leave it empty locally.
+- `VPIC_BASE_URL` - vehicle data server, defaults to `https://vpic.nhtsa.dot.gov/api`.
+
+### Frontend environment
+
+Next.js loads `frontend/.env.local`, which needs the API's URL:
+
+```sh
+NEXT_PUBLIC_API_URL=http://localhost:3333
+```
+
+`COOKIE_DOMAIN` can also be set here and must match the backend's value; leave it unset locally.
+
+### Run it
+
+From the repo root:
+
+```sh
+pnpm dev
+```
+
+This starts Postgres, the Go API and the Next.js frontend together.
+Open http://localhost:4000 for the app; the API runs on http://localhost:3333 and answers `GET /healthz`.
+
 ## Backend
 
 ### Running tests
