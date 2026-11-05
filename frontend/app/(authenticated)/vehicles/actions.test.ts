@@ -9,6 +9,7 @@ import {
 import { API_URL, server } from "@/test/server";
 import {
   createVehicleAction,
+  deleteVehicleAction,
   updateVehicleAction,
   type VehicleFormState,
 } from "./actions";
@@ -336,5 +337,83 @@ describe("updateVehicleAction", () => {
       updateVehicleAction(7, initialState, formData(validFields)),
       "/login?reason=unauthorized",
     );
+  });
+});
+
+describe("deleteVehicleAction", () => {
+  function serveDelete(response: () => Response) {
+    const requests: { id: string; cookie: string | null }[] = [];
+
+    server.use(
+      http.delete(`${API_URL}/api/vehicles/:id`, ({ params, request }) => {
+        requests.push({
+          id: String(params.id),
+          cookie: request.headers.get("cookie"),
+        });
+
+        return response();
+      }),
+    );
+
+    return requests;
+  }
+
+  it("deletes the vehicle and returns to the list with a success toast", async () => {
+    cookieJar.set("otto_session_token", "session-123");
+    const requests = serveDelete(() => new HttpResponse(null, { status: 204 }));
+
+    await expectRedirect(deleteVehicleAction(7), "/vehicles?status=deleted");
+    expect(requests).toEqual([
+      { id: "7", cookie: "otto_session_token=session-123" },
+    ]);
+    expect(revalidatePath).toHaveBeenCalledWith("/vehicles");
+  });
+
+  it("shows the not-found page for a vehicle the visitor does not own", async () => {
+    serveDelete(() =>
+      HttpResponse.json({ error: "Vehicle not found." }, { status: 404 }),
+    );
+
+    await expect(deleteVehicleAction(8)).rejects.toThrow(NotFoundError);
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it.each([0, -1, 1.5, Number.NaN, "7" as unknown as number])(
+    "shows the not-found page for the crafted id %j without asking the backend",
+    async (id) => {
+      const requests = serveDelete(
+        () => new HttpResponse(null, { status: 204 }),
+      );
+
+      await expect(deleteVehicleAction(id)).rejects.toThrow(NotFoundError);
+      expect(requests).toEqual([]);
+    },
+  );
+
+  it("returns other backend errors as a message", async () => {
+    serveDelete(() =>
+      HttpResponse.json({ error: "unable to delete vehicle" }, { status: 500 }),
+    );
+
+    expect(await deleteVehicleAction(7)).toEqual({
+      message: "Unable to delete vehicle",
+    });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("explains when the backend cannot be reached", async () => {
+    serveDelete(() => HttpResponse.error());
+
+    expect(await deleteVehicleAction(7)).toEqual({
+      message: "Could not reach the server. Please try again.",
+    });
+  });
+
+  it("sends signed-out visitors to the login page", async () => {
+    serveDelete(() =>
+      HttpResponse.json({ error: "Unauthorized." }, { status: 401 }),
+    );
+
+    await expectRedirect(deleteVehicleAction(7), "/login?reason=unauthorized");
   });
 });

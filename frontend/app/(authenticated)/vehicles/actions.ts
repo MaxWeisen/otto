@@ -11,6 +11,7 @@ import {
 } from "@/lib/vehicle-schema";
 import {
   createVehicle,
+  deleteVehicle,
   updateVehicle,
   type MutationResult,
   type Vehicle,
@@ -84,4 +85,19 @@ export async function updateVehicleAction(
   revalidatePath("/vehicles");
 
   return { values, saved: true };
+}
+
+export type DeleteVehicleState = { message?: string };
+
+export async function deleteVehicleAction(
+  id: number,
+): Promise<DeleteVehicleState> {
+  const result = await deleteVehicle(id);
+
+  if (!result.ok) {
+    return { message: result.error };
+  }
+
+  revalidatePath("/vehicles");
+  redirect("/vehicles?status=deleted");
 }

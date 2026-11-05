@@ -56,7 +56,7 @@ Set `E2E_VPIC_PORT`, `E2E_BACKEND_PORT` or `E2E_FRONTEND_PORT` to use other port
 They need Go to run the backend, `goose` on the `PATH` to migrate the database, and Postgres with the `otto_test` database described above.
 `E2E_DATABASE_URL` defaults to the docker-compose `otto_test` database, and the tests refuse to run against any database other than `otto_test`.
 A signed-in test user is created directly in the database, so no Google sign-in is needed.
-A second user that owns vehicles but never signs in is created the same way, to check that the test user cannot see or edit other people's vehicles.
+A second user that owns vehicles but never signs in is created the same way, to check that the test user cannot see, edit or delete other people's vehicles.
 To run them:
 
 ```sh

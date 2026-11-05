@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/page-header";
 import { VehicleDetailsCard } from "@/components/vehicle-details-card";
 import { getVehicle } from "@/lib/vehicles";
-import { updateVehicleAction } from "../actions";
+import { deleteVehicleAction, updateVehicleAction } from "../actions";
 
 type VehiclePageProps = {
   params: Promise<{ id: string }>;
@@ -30,6 +30,7 @@ export default async function VehiclePage({ params }: VehiclePageProps) {
       <VehicleDetailsCard
         vehicle={vehicle}
         action={updateVehicleAction.bind(null, vehicle.id)}
+        deleteAction={deleteVehicleAction.bind(null, vehicle.id)}
       />
     </div>
   );

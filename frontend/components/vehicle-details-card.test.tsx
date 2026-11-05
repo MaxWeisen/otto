@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay, http, HttpResponse } from "msw";
 import { toast } from "sonner";
@@ -11,7 +11,10 @@ import {
   it,
   vi,
 } from "vitest";
-import type { VehicleFormState } from "@/app/(authenticated)/vehicles/actions";
+import type {
+  DeleteVehicleState,
+  VehicleFormState,
+} from "@/app/(authenticated)/vehicles/actions";
 import { VehicleDetailsCard } from "@/components/vehicle-details-card";
 import type { Vehicle } from "@/lib/vehicles";
 import { server } from "@/test/server";
@@ -59,19 +62,23 @@ type Action = (
   formData: FormData,
 ) => Promise<VehicleFormState>;
 
+type DeleteAction = () => Promise<DeleteVehicleState>;
+
 function renderCard(
   vehicle: Vehicle = accord,
   action: Action = vi.fn(async (state: VehicleFormState) => state),
+  deleteAction: DeleteAction = vi.fn(async () => ({})),
 ) {
   const user = userEvent.setup();
   const view = render(
     <VehicleDetailsCard
       vehicle={vehicle}
       action={action}
+      deleteAction={deleteAction}
     />,
   );
 
-  return { user, action, view };
+  return { user, action, deleteAction, view };
 }
 
 /** Resolves with the action's result for the submitted form. */
@@ -294,6 +301,7 @@ describe("VehicleDetailsCard", () => {
           nickname: "Daily",
         }}
         action={action}
+        deleteAction={vi.fn(async () => ({}))}
       />,
     );
 
@@ -389,5 +397,119 @@ describe("VehicleDetailsCard", () => {
     expect(textbox(/^VIN/)).toHaveFocus();
     expect(textbox(/^VIN/)).toHaveAttribute("aria-invalid", "true");
     expect(form()).toBeInTheDocument();
+  });
+});
+
+describe("Deleting from the edit form", () => {
+  const deleteButton = () => screen.getByRole("button", { name: "Delete" });
+  const dialog = () => screen.queryByRole("alertdialog");
+
+  async function openConfirmation(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(deleteButton());
+    await waitFor(() =>
+      expect(
+        within(dialog()!).getByRole("button", { name: "Cancel" }),
+      ).toHaveFocus(),
+    );
+  }
+
+  it("offers Delete only in edit mode", async () => {
+    const { user } = renderCard();
+
+    expect(
+      screen.queryByRole("button", { name: "Delete" }),
+    ).not.toBeInTheDocument();
+
+    await startEditing(user);
+
+    expect(deleteButton()).toBeInTheDocument();
+  });
+
+  it("puts Delete on its own at the start of the actions, apart from Cancel and Save", async () => {
+    const { user } = renderCard();
+
+    await startEditing(user);
+
+    const footer = deleteButton().parentElement!;
+    const saveGroup = screen.getByRole("button", {
+      name: "Save",
+    }).parentElement!;
+
+    expect(footer).toHaveClass("justify-between");
+    expect(footer.firstElementChild).toBe(deleteButton());
+    expect(footer.lastElementChild).toBe(saveGroup);
+    expect(saveGroup).toContainElement(
+      screen.getByRole("button", { name: "Cancel" }),
+    );
+  });
+
+  it("asks for confirmation naming the vehicle and what is lost, focusing Cancel", async () => {
+    const { user, deleteAction } = renderCard();
+
+    await startEditing(user);
+    await openConfirmation(user);
+
+    expect(dialog()).toHaveAccessibleName("Delete 2003 Honda Accord?");
+    expect(dialog()).toHaveAccessibleDescription(
+      "This permanently deletes the vehicle and all of its maintenance records. It cannot be undone.",
+    );
+    expect(deleteAction).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      "Cancel",
+      async (user: ReturnType<typeof userEvent.setup>) =>
+        user.click(screen.getByRole("button", { name: "Cancel" })),
+    ],
+    [
+      "Escape",
+      async (user: ReturnType<typeof userEvent.setup>) =>
+        user.keyboard("{Escape}"),
+    ],
+  ])(
+    "closes the confirmation on %s and stays in the form",
+    async (_name, dismiss) => {
+      const { user, deleteAction } = renderCard();
+
+      await startEditing(user);
+      await openConfirmation(user);
+      await dismiss(user);
+
+      await waitFor(() => expect(dialog()).not.toBeInTheDocument());
+      expect(form()).toBeInTheDocument();
+      expect(deleteButton()).toHaveFocus();
+      expect(deleteAction).not.toHaveBeenCalled();
+    },
+  );
+
+  it("deletes the vehicle on confirm", async () => {
+    const { user, deleteAction } = renderCard();
+
+    await startEditing(user);
+    await openConfirmation(user);
+    await user.click(screen.getByRole("button", { name: "Delete vehicle" }));
+
+    expect(deleteAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables Delete while saving", async () => {
+    let finish: () => void = () => {};
+    const action = vi.fn(
+      (state: VehicleFormState) =>
+        new Promise<VehicleFormState>((resolve) => {
+          finish = () => resolve(state);
+        }),
+    );
+    const { user } = renderCard(accord, action);
+
+    await startEditing(user);
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(deleteButton()).toBeDisabled();
+
+    finish();
+
+    await waitFor(() => expect(deleteButton()).toBeEnabled());
   });
 });

@@ -19,6 +19,7 @@ export const metadata: Metadata = { title: "Vehicles - Otto" };
 
 const statusMessages: Record<string, string> = {
   created: "Vehicle added",
+  deleted: "Vehicle deleted",
 };
 
 export default async function VehiclesPage({

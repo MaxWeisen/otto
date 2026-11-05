@@ -86,6 +86,17 @@ describe("VehiclesPage", () => {
     expect(router.replace).toHaveBeenCalledWith("/vehicles");
   });
 
+  it("confirms a deleted vehicle with a toast", async () => {
+    serveVehicles([]);
+
+    await renderPage("deleted");
+
+    expect(toast.success).toHaveBeenCalledWith("Vehicle deleted", {
+      id: "toast-Vehicle deleted",
+    });
+    expect(router.replace).toHaveBeenCalledWith("/vehicles");
+  });
+
   it("sends signed-out visitors to the login page", async () => {
     server.use(
       http.get(`${API_URL}/api/vehicles`, () =>

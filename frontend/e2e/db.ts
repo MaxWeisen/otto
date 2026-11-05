@@ -141,3 +141,25 @@ function removeUsers(condition: string, params: string[]): Promise<void> {
     await db.query(`DELETE FROM users WHERE ${condition}`, params);
   });
 }
+
+export function insertMaintenanceRecord(vehicleId: number): Promise<void> {
+  return withDb(async (db) => {
+    await db.query(
+      `INSERT INTO maintenance_records
+         (vehicle_id, type, description, performed_at)
+       VALUES ($1, 'oil_change', 'Oil and filter', '2026-01-15')`,
+      [vehicleId],
+    );
+  });
+}
+
+export function countMaintenanceRecords(vehicleId: number): Promise<number> {
+  return withDb(async (db) => {
+    const { rows } = await db.query<{ count: string }>(
+      `SELECT count(*) FROM maintenance_records WHERE vehicle_id = $1`,
+      [vehicleId],
+    );
+
+    return Number(rows[0].count);
+  });
+}

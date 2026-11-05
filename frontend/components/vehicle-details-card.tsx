@@ -2,7 +2,11 @@
 
 import { useState } from "react";
 import { PencilSimpleIcon } from "@phosphor-icons/react";
-import type { VehicleFormState } from "@/app/(authenticated)/vehicles/actions";
+import type {
+  DeleteVehicleState,
+  VehicleFormState,
+} from "@/app/(authenticated)/vehicles/actions";
+import { DeleteVehicleDialog } from "@/components/delete-vehicle-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -25,6 +29,7 @@ type VehicleDetailsCardProps = {
     state: VehicleFormState,
     formData: FormData,
   ) => Promise<VehicleFormState>;
+  deleteAction: () => Promise<DeleteVehicleState>;
 };
 
 /**
@@ -34,9 +39,11 @@ type VehicleDetailsCardProps = {
 export function VehicleDetailsCard({
   vehicle,
   action,
+  deleteAction,
 }: VehicleDetailsCardProps) {
   const [editing, setEditing] = useState(false);
   const [hasEdited, setHasEdited] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   function stopEditing() {
     setEditing(false);
@@ -45,12 +52,21 @@ export function VehicleDetailsCard({
 
   if (editing) {
     return (
-      <VehicleEditForm
-        action={action}
-        defaultValues={vehicleFormValues(vehicle)}
-        onCancel={stopEditing}
-        onSaved={stopEditing}
-      />
+      <>
+        <VehicleEditForm
+          action={action}
+          defaultValues={vehicleFormValues(vehicle)}
+          onCancel={stopEditing}
+          onSaved={stopEditing}
+          onDelete={() => setConfirmingDelete(true)}
+        />
+        <DeleteVehicleDialog
+          vehicle={vehicle}
+          open={confirmingDelete}
+          onOpenChange={setConfirmingDelete}
+          action={deleteAction}
+        />
+      </>
     );
   }
 

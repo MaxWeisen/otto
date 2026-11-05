@@ -65,6 +65,7 @@ type VehicleEditFormProps = {
   defaultValues: VehicleFormValues;
   onCancel: () => void;
   onSaved: () => void;
+  onDelete: () => void;
 };
 
 /**
@@ -76,6 +77,7 @@ export function VehicleEditForm({
   defaultValues,
   onCancel,
   onSaved,
+  onDelete,
 }: VehicleEditFormProps) {
   const [state, formAction, pending] = useActionState(action, {
     values: defaultValues,
@@ -196,28 +198,38 @@ export function VehicleEditForm({
             {state.message && <FormAlert message={state.message} />}
           </FieldGroup>
         </CardContent>
-        <CardFooter className="justify-end gap-2">
+        <CardFooter className="justify-between gap-2">
           <Button
             type="button"
-            variant="outline"
-            onClick={onCancel}
+            variant="destructive"
+            onClick={onDelete}
             disabled={pending}
           >
-            Cancel
+            Delete
           </Button>
-          <Button
-            ref={saveButton}
-            type="submit"
-            disabled={pending}
-          >
-            {pending && (
-              <SpinnerIcon
-                data-icon="inline-start"
-                className="animate-spin"
-              />
-            )}
-            Save
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onCancel}
+              disabled={pending}
+            >
+              Cancel
+            </Button>
+            <Button
+              ref={saveButton}
+              type="submit"
+              disabled={pending}
+            >
+              {pending && (
+                <SpinnerIcon
+                  data-icon="inline-start"
+                  className="animate-spin"
+                />
+              )}
+              Save
+            </Button>
+          </div>
         </CardFooter>
       </Card>
     </form>
