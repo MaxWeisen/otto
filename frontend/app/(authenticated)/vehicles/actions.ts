@@ -55,7 +55,7 @@ export async function createVehicleAction(
     return failureState(values, result);
   }
 
-  revalidatePath("/vehicles");
+  revalidatePath("/(authenticated)/vehicles", "layout");
   redirect("/vehicles?status=created");
 }
 
@@ -81,8 +81,7 @@ export async function updateVehicleAction(
     return failureState(values, result);
   }
 
-  revalidatePath(`/vehicles/${id}`);
-  revalidatePath("/vehicles");
+  revalidatePath("/(authenticated)/vehicles", "layout");
 
   return { values, saved: true };
 }
@@ -98,6 +97,6 @@ export async function deleteVehicleAction(
     return { message: result.error };
   }
 
-  revalidatePath("/vehicles");
+  revalidatePath("/(authenticated)/vehicles", "layout");
   redirect("/vehicles?status=deleted");
 }

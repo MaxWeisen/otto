@@ -80,8 +80,10 @@ describe("createMaintenanceRecordAction", () => {
         notes: null,
       },
     ]);
-    expect(revalidatePath).toHaveBeenCalledWith("/vehicles/7");
-    expect(revalidatePath).toHaveBeenCalledWith("/vehicles");
+    expect(revalidatePath).toHaveBeenCalledExactlyOnceWith(
+      "/(authenticated)/vehicles",
+      "layout",
+    );
   });
 
   it("returns field errors without calling the API", async () => {
@@ -140,8 +142,10 @@ describe("updateMaintenanceRecordAction", () => {
       updateMaintenanceRecordAction(7, 31, initialState, formData(fields)),
     ).resolves.toEqual({ values: fields, saved: true });
     expect(bodies).toHaveLength(1);
-    expect(revalidatePath).toHaveBeenCalledWith("/vehicles/7");
-    expect(revalidatePath).toHaveBeenCalledWith("/vehicles");
+    expect(revalidatePath).toHaveBeenCalledExactlyOnceWith(
+      "/(authenticated)/vehicles",
+      "layout",
+    );
   });
 
   it("explains a record that is gone and refreshes the page", async () => {
@@ -153,7 +157,10 @@ describe("updateMaintenanceRecordAction", () => {
       values: fields,
       message: "This maintenance record no longer exists.",
     });
-    expect(revalidatePath).toHaveBeenCalledWith("/vehicles/7");
+    expect(revalidatePath).toHaveBeenCalledExactlyOnceWith(
+      "/(authenticated)/vehicles",
+      "layout",
+    );
   });
 });
 
@@ -164,7 +171,10 @@ describe("deleteMaintenanceRecordAction", () => {
     await expect(deleteMaintenanceRecordAction(7, 31)).resolves.toEqual({
       ok: true,
     });
-    expect(revalidatePath).toHaveBeenCalledExactlyOnceWith("/vehicles/7");
+    expect(revalidatePath).toHaveBeenCalledExactlyOnceWith(
+      "/(authenticated)/vehicles",
+      "layout",
+    );
   });
 
   it("explains a record that is gone and refreshes the page", async () => {
@@ -174,7 +184,10 @@ describe("deleteMaintenanceRecordAction", () => {
       ok: false,
       error: "This maintenance record no longer exists.",
     });
-    expect(revalidatePath).toHaveBeenCalledWith("/vehicles/7");
+    expect(revalidatePath).toHaveBeenCalledExactlyOnceWith(
+      "/(authenticated)/vehicles",
+      "layout",
+    );
   });
 
   it("returns other failures without refreshing", async () => {

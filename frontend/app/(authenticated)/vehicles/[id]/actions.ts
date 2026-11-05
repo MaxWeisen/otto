@@ -42,12 +42,6 @@ function failureState(
   };
 }
 
-// Saving a record can raise the vehicle's mileage, which both pages show.
-function revalidateSavedRecord(vehicleId: number) {
-  revalidatePath(`/vehicles/${vehicleId}`);
-  revalidatePath("/vehicles");
-}
-
 export async function createMaintenanceRecordAction(
   vehicleId: number,
   _previousState: MaintenanceFormState,
@@ -66,7 +60,7 @@ export async function createMaintenanceRecordAction(
     return failureState(values, result);
   }
 
-  revalidateSavedRecord(vehicleId);
+  revalidatePath("/(authenticated)/vehicles", "layout");
 
   return { values, saved: true };
 }
@@ -93,13 +87,13 @@ export async function updateMaintenanceRecordAction(
   if (!result.ok) {
     // A missing record, or vehicle, disappears from the page on refresh.
     if (result.status === 404) {
-      revalidatePath(`/vehicles/${vehicleId}`);
+      revalidatePath("/(authenticated)/vehicles", "layout");
     }
 
     return failureState(values, result);
   }
 
-  revalidateSavedRecord(vehicleId);
+  revalidatePath("/(authenticated)/vehicles", "layout");
 
   return { values, saved: true };
 }
@@ -114,7 +108,7 @@ export async function deleteMaintenanceRecordAction(
     return { ok: false, error: result.error };
   }
 
-  revalidatePath(`/vehicles/${vehicleId}`);
+  revalidatePath("/(authenticated)/vehicles", "layout");
 
   return result.ok ? { ok: true } : { ok: false, error: RECORD_GONE };
 }

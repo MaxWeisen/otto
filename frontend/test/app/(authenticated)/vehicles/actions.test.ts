@@ -95,7 +95,10 @@ describe("createVehicleAction", () => {
         vin: "1HGCM82633A004352",
       },
     });
-    expect(revalidatePath).toHaveBeenCalledWith("/vehicles");
+    expect(revalidatePath).toHaveBeenCalledExactlyOnceWith(
+      "/(authenticated)/vehicles",
+      "layout",
+    );
   });
 
   it("returns field errors without calling the API", async () => {
@@ -238,8 +241,10 @@ describe("updateVehicleAction", () => {
         },
       },
     ]);
-    expect(revalidatePath).toHaveBeenCalledWith("/vehicles/7");
-    expect(revalidatePath).toHaveBeenCalledWith("/vehicles");
+    expect(revalidatePath).toHaveBeenCalledExactlyOnceWith(
+      "/(authenticated)/vehicles",
+      "layout",
+    );
   });
 
   it("returns field errors without calling the API", async () => {
@@ -366,7 +371,10 @@ describe("deleteVehicleAction", () => {
     expect(requests).toEqual([
       { id: "7", cookie: "otto_session_token=session-123" },
     ]);
-    expect(revalidatePath).toHaveBeenCalledWith("/vehicles");
+    expect(revalidatePath).toHaveBeenCalledExactlyOnceWith(
+      "/(authenticated)/vehicles",
+      "layout",
+    );
   });
 
   it("shows the not-found page for a vehicle the visitor does not own", async () => {
