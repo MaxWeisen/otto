@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import {
   clearVehicles,
   findMaintenanceRecords,
+  findVehicle,
   insertMaintenanceRecord,
   insertOtherUsersVehicle,
   insertVehicle,
@@ -130,6 +131,69 @@ test("adds, edits and deletes a maintenance record", async ({ page }) => {
 
   await page.reload();
   await expect(page.getByText("No maintenance logged yet")).toBeVisible();
+});
+
+test("raises the vehicle's mileage to a record's higher reading", async ({
+  page,
+}) => {
+  const id = await insertVehicle(accord);
+  const main = page.getByRole("main");
+  const mileage = main.locator(`dt:text-is("Mileage") + dd`);
+  const entry = maintenance(page).getByRole("listitem");
+
+  await page.goto(`/vehicles/${id}`);
+  await page.getByRole("button", { name: "Add your first record" }).click();
+
+  const addDialog = page.getByRole("dialog", {
+    name: "Add maintenance record",
+  });
+
+  await addDialog.getByRole("combobox", { name: "Type" }).click();
+  await page.getByRole("option", { name: "Tire rotation" }).click();
+  await addDialog
+    .getByRole("textbox", { name: /^Description/ })
+    .fill("Rotate and balance");
+  await addDialog.getByRole("textbox", { name: /^Mileage/ }).fill("185,500");
+  await addDialog.getByRole("button", { name: "Add record" }).click();
+
+  await expect(entry).not.toHaveAttribute("aria-busy");
+  await expect(mileage).toHaveText("185,500 mi");
+
+  const edit = async (reading: string) => {
+    await entry.getByRole("button", { name: /^Edit / }).click();
+
+    const editDialog = page.getByRole("dialog", {
+      name: "Edit maintenance record",
+    });
+
+    await editDialog.getByRole("textbox", { name: /^Mileage/ }).fill(reading);
+    await editDialog.getByRole("button", { name: "Save" }).click();
+    await expect(editDialog).toHaveCount(0);
+  };
+
+  await edit("184,000");
+  await expect(entry).toContainText("184,000 mi");
+  await expect(mileage).toHaveText("185,500 mi");
+
+  await edit("190,250");
+  await expect(mileage).toHaveText("190,250 mi");
+
+  await page.getByRole("link", { name: "Back to vehicles" }).click();
+  await expect(main.getByRole("listitem")).toContainText("190,250 mi");
+  await main
+    .getByRole("button", { name: "Details for 2003 Honda Accord" })
+    .click();
+
+  await entry.getByRole("button", { name: /^Delete / }).click();
+  await page
+    .getByRole("alertdialog", { name: "Delete this record?" })
+    .getByRole("button", { name: "Delete" })
+    .click();
+  await expect(page.getByText("No maintenance logged yet")).toBeVisible();
+
+  await page.reload();
+  await expect(mileage).toHaveText("190,250 mi");
+  expect((await findVehicle(id))?.mileage).toBe(190250);
 });
 
 test("groups records by year, newest first", async ({ page }) => {
