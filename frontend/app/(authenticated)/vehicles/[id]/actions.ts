@@ -42,6 +42,12 @@ function failureState(
   };
 }
 
+// Saving a record can raise the vehicle's mileage, which both pages show.
+function revalidateSavedRecord(vehicleId: number) {
+  revalidatePath(`/vehicles/${vehicleId}`);
+  revalidatePath("/vehicles");
+}
+
 export async function createMaintenanceRecordAction(
   vehicleId: number,
   _previousState: MaintenanceFormState,
@@ -60,7 +66,7 @@ export async function createMaintenanceRecordAction(
     return failureState(values, result);
   }
 
-  revalidatePath(`/vehicles/${vehicleId}`);
+  revalidateSavedRecord(vehicleId);
 
   return { values, saved: true };
 }
@@ -93,7 +99,7 @@ export async function updateMaintenanceRecordAction(
     return failureState(values, result);
   }
 
-  revalidatePath(`/vehicles/${vehicleId}`);
+  revalidateSavedRecord(vehicleId);
 
   return { values, saved: true };
 }

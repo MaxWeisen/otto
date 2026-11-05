@@ -81,6 +81,7 @@ describe("createMaintenanceRecordAction", () => {
       },
     ]);
     expect(revalidatePath).toHaveBeenCalledWith("/vehicles/7");
+    expect(revalidatePath).toHaveBeenCalledWith("/vehicles");
   });
 
   it("returns field errors without calling the API", async () => {
@@ -140,6 +141,7 @@ describe("updateMaintenanceRecordAction", () => {
     ).resolves.toEqual({ values: fields, saved: true });
     expect(bodies).toHaveLength(1);
     expect(revalidatePath).toHaveBeenCalledWith("/vehicles/7");
+    expect(revalidatePath).toHaveBeenCalledWith("/vehicles");
   });
 
   it("explains a record that is gone and refreshes the page", async () => {
@@ -162,7 +164,7 @@ describe("deleteMaintenanceRecordAction", () => {
     await expect(deleteMaintenanceRecordAction(7, 31)).resolves.toEqual({
       ok: true,
     });
-    expect(revalidatePath).toHaveBeenCalledWith("/vehicles/7");
+    expect(revalidatePath).toHaveBeenCalledExactlyOnceWith("/vehicles/7");
   });
 
   it("explains a record that is gone and refreshes the page", async () => {
