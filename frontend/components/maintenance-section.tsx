@@ -1,14 +1,15 @@
 "use client";
 
 import {
-  startTransition,
   useActionState,
   useEffect,
   useEffectEvent,
   useOptimistic,
   useRef,
   useState,
+  useTransition,
 } from "react";
+import { unstable_rethrow } from "next/navigation";
 import { toast } from "sonner";
 import { PlusIcon, WrenchIcon } from "@phosphor-icons/react";
 import type {
@@ -90,7 +91,8 @@ async function submitForm(
 ): Promise<MaintenanceFormState> {
   try {
     return await action(previous, formData);
-  } catch {
+  } catch (error) {
+    unstable_rethrow(error);
     return {
       values: readMaintenanceFormValues(formData),
       message: UNREACHABLE,
@@ -161,6 +163,7 @@ export function MaintenanceSection({
   const [deleting, setDeleting] = useState<MaintenanceRecord | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const deleteConfirmed = useRef(false);
+  const [, startTransition] = useTransition();
 
   function openAdd(state: MaintenanceFormState = freshAddState()) {
     setAddState(state);
@@ -233,10 +236,13 @@ export function MaintenanceSection({
     startTransition(async () => {
       applyOptimistic({ kind: "delete", id: record.id });
 
-      const result = await deleteAction(record.id).catch(() => ({
-        ok: false as const,
-        error: UNREACHABLE,
-      }));
+      let result: DeleteMaintenanceResult;
+      try {
+        result = await deleteAction(record.id);
+      } catch (error) {
+        unstable_rethrow(error);
+        result = { ok: false, error: UNREACHABLE };
+      }
 
       if (result.ok) {
         toast.success("Maintenance record deleted");

@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
+import { Component, type ReactNode } from "react";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type {
   DeleteMaintenanceResult,
@@ -9,6 +10,7 @@ import type {
 import { MaintenanceSection } from "@/components/maintenance-section";
 import type { MaintenanceRecord } from "@/lib/maintenance";
 import type { Vehicle } from "@/lib/vehicles";
+import { NotFoundError } from "@/test/next-mocks";
 
 beforeAll(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
@@ -53,11 +55,29 @@ const inspection: MaintenanceRecord = {
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((r) => {
-    resolve = r;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
   });
 
-  return { promise, resolve };
+  return { promise, resolve, reject };
+}
+
+class NotFoundBoundary extends Component<
+  { children: ReactNode },
+  { notFound: boolean }
+> {
+  state = { notFound: false };
+
+  static getDerivedStateFromError(error: unknown) {
+    if (error instanceof NotFoundError) return { notFound: true };
+    throw error;
+  }
+
+  render() {
+    return this.state.notFound ? <p>Not found</p> : this.props.children;
+  }
 }
 
 function renderSection(records: MaintenanceRecord[] = [brakes, inspection]) {
@@ -70,17 +90,21 @@ function renderSection(records: MaintenanceRecord[] = [brakes, inspection]) {
   const user = userEvent.setup();
   const props = { vehicle: accord, createAction, updateAction, deleteAction };
   const view = render(
-    <MaintenanceSection
-      records={records}
-      {...props}
-    />,
+    <NotFoundBoundary>
+      <MaintenanceSection
+        records={records}
+        {...props}
+      />
+    </NotFoundBoundary>,
   );
   const rerender = (next: MaintenanceRecord[]) =>
     view.rerender(
-      <MaintenanceSection
-        records={next}
-        {...props}
-      />,
+      <NotFoundBoundary>
+        <MaintenanceSection
+          records={next}
+          {...props}
+        />
+      </NotFoundBoundary>,
     );
 
   return {
@@ -264,6 +288,45 @@ describe("MaintenanceSection", () => {
       expect(toast.success).toHaveBeenCalledWith("Maintenance record deleted"),
     );
     expect(screen.queryByText("Front pads and rotors")).not.toBeInTheDocument();
+  });
+
+  it("shows not-found instead of an error toast when adding to a missing vehicle", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const { user, create } = renderSection();
+
+    await user.click(screen.getByRole("button", { name: "Add record" }));
+    await fillNewRecord(user);
+    await user.click(
+      within(dialog()!).getByRole("button", { name: "Add record" }),
+    );
+
+    expect(await screen.findByText("Saving...")).toBeInTheDocument();
+
+    create.reject(new NotFoundError());
+
+    expect(await screen.findByText("Not found")).toBeInTheDocument();
+    expect(toast.error).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  it("shows not-found instead of an error toast when deleting from a missing vehicle", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const { user, remove } = renderSection();
+
+    await user.click(
+      screen.getByRole("button", { name: "Delete Brakes from Jan 18, 2026" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    remove.reject(new NotFoundError());
+
+    expect(await screen.findByText("Not found")).toBeInTheDocument();
+    expect(toast.error).not.toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 
   it("restores a record that could not be deleted", async () => {
