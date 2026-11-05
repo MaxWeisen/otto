@@ -17,7 +17,7 @@ Only answers rooted in facts.
 
 ### Install dependencies
 
-The root package only holds `concurrently`, which runs everything together; the frontend has its own install:
+The root package holds `concurrently`, which runs everything together, and the commitizen tooling behind `pnpm commit`; the frontend has its own install:
 
 ```sh
 pnpm install

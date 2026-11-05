@@ -1,20 +1,13 @@
 ## Getting Started
 
-First, run the development server:
-
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+See [Develop Locally](../README.md#develop-locally) in the root README to set up Postgres, the backend and the environment, then run `pnpm dev` from the repo root to start everything together.
+To run only the frontend, run `pnpm dev` here.
 
 Open [http://localhost:4000](http://localhost:4000) with your browser to see the result.
 
 ## Environment
+
+Set these in `frontend/.env.local`.
 
 - `NEXT_PUBLIC_API_URL` - base URL of the backend API, used for sign-in, logout and every server-side API call, including the vehicles pages and the `/api/vpic` route handlers that proxy vehicle data lookups.
   A 401 from the backend sends the visitor to the login page.
