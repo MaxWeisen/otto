@@ -2,26 +2,17 @@
 
 import { revalidatePath } from "next/cache";
 import {
-  createMaintenanceRecord,
   deleteMaintenanceRecord,
-  updateMaintenanceRecord,
-  type MaintenanceRecord,
+  saveMaintenanceRecord,
+  type MaintenanceInput,
 } from "@/lib/maintenance";
-import {
-  maintenanceApiErrors,
-  readMaintenanceFormValues,
-  validateMaintenanceForm,
-  type MaintenanceFieldErrors,
-  type MaintenanceFormValues,
-} from "@/lib/maintenance-schema";
-import { getVehicle, type MutationResult } from "@/lib/vehicles";
+import { getVehicle } from "@/lib/vehicles";
 
 export type MaintenanceFormState = {
-  values: MaintenanceFormValues;
-  errors?: MaintenanceFieldErrors;
+  values?: Record<string, string>;
+  errors?: Record<string, string>;
   message?: string;
   saved?: boolean;
-  gone?: boolean;
 };
 
 export type DeleteMaintenanceResult =
@@ -29,24 +20,54 @@ export type DeleteMaintenanceResult =
 
 const RECORD_GONE = "This maintenance record no longer exists.";
 
+function readInput(formData: FormData): MaintenanceInput {
+  const text = (name: string) => String(formData.get(name) ?? "").trim();
+  const mileage = text("mileage").replace(/[\s,]/g, "");
+  const cost = text("cost").replace(/[\s,$]/g, "");
+
+  return {
+    type: text("type"),
+    description: text("description"),
+    performed_at: text("performed_at"),
+    mileage: /^-?\d+$/.test(mileage) ? Number(mileage) : mileage || null,
+    cost: cost || null,
+    notes: text("notes") || null,
+  };
+}
+
 // A 404 can mean the whole vehicle is gone, which shows the not-found page.
-async function refreshAfterRecordGone(vehicleId: number) {
+async function refreshAfterNotFound(vehicleId: number) {
   await getVehicle(String(vehicleId));
   revalidatePath("/(authenticated)/vehicles", "layout");
 }
 
-function failureState(
-  values: MaintenanceFormValues,
-  result: Extract<MutationResult<MaintenanceRecord>, { ok: false }>,
-): MaintenanceFormState {
-  if (result.status === 400) {
-    return { values, ...maintenanceApiErrors(result.error) };
+async function save(
+  vehicleId: number,
+  recordId: number | undefined,
+  formData: FormData,
+): Promise<MaintenanceFormState> {
+  const values = Object.fromEntries(
+    [...formData].map(([name, value]) => [name, String(value)]),
+  );
+  const result = await saveMaintenanceRecord(
+    vehicleId,
+    recordId,
+    readInput(formData),
+  );
+
+  if (result.ok) {
+    revalidatePath("/(authenticated)/vehicles", "layout");
+    return { saved: true };
   }
 
-  return {
-    values,
-    message: result.status === 404 ? RECORD_GONE : result.error,
-  };
+  if (result.status === 404) {
+    await refreshAfterNotFound(vehicleId);
+    return { values, message: RECORD_GONE };
+  }
+
+  return result.errors
+    ? { values, errors: result.errors }
+    : { values, message: result.error };
 }
 
 export async function createMaintenanceRecordAction(
@@ -54,22 +75,7 @@ export async function createMaintenanceRecordAction(
   _previousState: MaintenanceFormState,
   formData: FormData,
 ): Promise<MaintenanceFormState> {
-  const values = readMaintenanceFormValues(formData);
-  const validation = validateMaintenanceForm(values);
-
-  if (!validation.success) {
-    return { values, errors: validation.errors };
-  }
-
-  const result = await createMaintenanceRecord(vehicleId, validation.data);
-
-  if (!result.ok) {
-    return failureState(values, result);
-  }
-
-  revalidatePath("/(authenticated)/vehicles", "layout");
-
-  return { values, saved: true };
+  return save(vehicleId, undefined, formData);
 }
 
 export async function updateMaintenanceRecordAction(
@@ -78,31 +84,7 @@ export async function updateMaintenanceRecordAction(
   _previousState: MaintenanceFormState,
   formData: FormData,
 ): Promise<MaintenanceFormState> {
-  const values = readMaintenanceFormValues(formData);
-  const validation = validateMaintenanceForm(values);
-
-  if (!validation.success) {
-    return { values, errors: validation.errors };
-  }
-
-  const result = await updateMaintenanceRecord(
-    vehicleId,
-    recordId,
-    validation.data,
-  );
-
-  if (!result.ok) {
-    if (result.status === 404) {
-      await refreshAfterRecordGone(vehicleId);
-      return { values, message: RECORD_GONE, gone: true };
-    }
-
-    return failureState(values, result);
-  }
-
-  revalidatePath("/(authenticated)/vehicles", "layout");
-
-  return { values, saved: true };
+  return save(vehicleId, recordId, formData);
 }
 
 export async function deleteMaintenanceRecordAction(
@@ -117,7 +99,7 @@ export async function deleteMaintenanceRecordAction(
   }
 
   if (result.status === 404) {
-    await refreshAfterRecordGone(vehicleId);
+    await refreshAfterNotFound(vehicleId);
     return { ok: false, error: RECORD_GONE };
   }
 

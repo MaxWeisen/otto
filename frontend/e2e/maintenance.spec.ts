@@ -43,8 +43,9 @@ test("adds, edits and deletes a maintenance record", async ({ page }) => {
   await expect(addDialog.getByText("Type is required")).toBeVisible();
   await expect(addDialog.getByRole("combobox", { name: "Type" })).toBeFocused();
 
-  await addDialog.getByRole("combobox", { name: "Type" }).click();
-  await page.getByRole("option", { name: "Oil change" }).click();
+  await addDialog
+    .getByRole("combobox", { name: "Type" })
+    .selectOption({ label: "Oil change" });
   await addDialog
     .getByRole("textbox", { name: /^Description/ })
     .fill("Synthetic 5W-30 and filter");
@@ -97,8 +98,9 @@ test("adds, edits and deletes a maintenance record", async ({ page }) => {
   await expect(editDialog.getByRole("textbox", { name: /^Cost/ })).toHaveValue(
     "79.90",
   );
-  await editDialog.getByRole("combobox", { name: "Type" }).click();
-  await page.getByRole("option", { name: "Repair" }).click();
+  await editDialog
+    .getByRole("combobox", { name: "Type" })
+    .selectOption({ label: "Repair" });
   await editDialog
     .getByRole("textbox", { name: /^Description/ })
     .fill("Replaced washer reservoir");
@@ -148,8 +150,9 @@ test("raises the vehicle's mileage to a record's higher reading", async ({
     name: "Add maintenance record",
   });
 
-  await addDialog.getByRole("combobox", { name: "Type" }).click();
-  await page.getByRole("option", { name: "Tire rotation" }).click();
+  await addDialog
+    .getByRole("combobox", { name: "Type" })
+    .selectOption({ label: "Tire rotation" });
   await addDialog
     .getByRole("textbox", { name: /^Description/ })
     .fill("Rotate and balance");
@@ -242,8 +245,9 @@ test("shows not-found when adding to a vehicle deleted elsewhere", async ({
     name: "Add maintenance record",
   });
 
-  await addDialog.getByRole("combobox", { name: "Type" }).click();
-  await page.getByRole("option", { name: "Oil change" }).click();
+  await addDialog
+    .getByRole("combobox", { name: "Type" })
+    .selectOption({ label: "Oil change" });
   await addDialog
     .getByRole("textbox", { name: /^Description/ })
     .fill("Synthetic 5W-30");
