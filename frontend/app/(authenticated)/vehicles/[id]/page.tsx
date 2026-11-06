@@ -5,11 +5,6 @@ import { VehicleDetailsCard } from "@/components/vehicle-details-card";
 import { listMaintenanceRecords } from "@/lib/maintenance";
 import { getVehicle } from "@/lib/vehicles";
 import { deleteVehicleAction, updateVehicleAction } from "../actions";
-import {
-  createMaintenanceRecordAction,
-  deleteMaintenanceRecordAction,
-  updateMaintenanceRecordAction,
-} from "./actions";
 
 type VehiclePageProps = {
   params: Promise<{ id: string }>;
@@ -46,9 +41,6 @@ export default async function VehiclePage({ params }: VehiclePageProps) {
       <MaintenanceSection
         vehicle={vehicle}
         records={records}
-        createAction={createMaintenanceRecordAction.bind(null, vehicle.id)}
-        updateAction={updateMaintenanceRecordAction.bind(null, vehicle.id)}
-        deleteAction={deleteMaintenanceRecordAction.bind(null, vehicle.id)}
       />
     </div>
   );

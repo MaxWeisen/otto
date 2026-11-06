@@ -1,4 +1,8 @@
 import { format, getYear, parseISO } from "date-fns";
+import {
+  MAINTENANCE_TYPE_LABELS,
+  type MaintenanceType,
+} from "@/lib/maintenance-schema";
 
 const mileageFormatter = new Intl.NumberFormat("en-US");
 const costFormatter = new Intl.NumberFormat("en-US", {
@@ -21,6 +25,13 @@ export function formatDay(date: string): string {
 
 export function formatFullDate(date: string): string {
   return format(parseISO(date), "MMM d, yyyy");
+}
+
+export function formatRecordName(record: {
+  type: MaintenanceType;
+  performed_at: string;
+}): string {
+  return `${MAINTENANCE_TYPE_LABELS[record.type]} from ${formatFullDate(record.performed_at)}`;
 }
 
 export function groupByYear<T extends { performed_at: string }>(
