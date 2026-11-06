@@ -48,7 +48,8 @@ export type SeedVehicle = {
 
 /**
  * The google_sub of a second user who signs in nowhere and only owns
- * vehicles, for checking that the test user cannot see them.
+ * vehicles and their maintenance records, for checking that the test user
+ * cannot see them.
  */
 function otherUserGoogleSub(): string {
   return `${e2eGoogleSub()}-other`;
