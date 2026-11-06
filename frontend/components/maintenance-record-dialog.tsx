@@ -49,6 +49,9 @@ export function MaintenanceRecordDialog({
   open,
   onOpenChange,
 }: MaintenanceRecordDialogProps) {
+  const [initialState] = useState<MaintenanceFormState>(() => ({
+    values: maintenanceFormValues(record, defaultMileage),
+  }));
   const [state, formAction, pending] = useActionState(
     async (previous: MaintenanceFormState, formData: FormData) => {
       let next: MaintenanceFormState;
@@ -75,11 +78,13 @@ export function MaintenanceRecordDialog({
             next.message ?? Object.values(next.errors ?? {}).flat()[0],
           action: { label: "Try again", onClick: () => onOpenChange(true) },
         });
+      } else if (next.gone) {
+        toast.error(next.message);
       }
 
       return next;
     },
-    { values: maintenanceFormValues(record, defaultMileage) },
+    initialState,
   );
 
   const [clientErrors, setClientErrors] = useState<MaintenanceFieldErrors>();
@@ -96,9 +101,10 @@ export function MaintenanceRecordDialog({
 
   useLayoutEffect(() => firstInvalidInput(state.errors)?.focus(), [state]);
 
-  const values = state.saved
-    ? maintenanceFormValues(record, defaultMileage)
-    : state.values;
+  const values =
+    state === initialState || state.saved
+      ? maintenanceFormValues(record, defaultMileage)
+      : state.values;
   const errors = clientErrors ?? (state.saved ? undefined : state.errors);
   const title = record ? "Edit maintenance record" : "Add maintenance record";
 

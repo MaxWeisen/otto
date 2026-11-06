@@ -143,7 +143,7 @@ describe("MaintenanceRecordDialog", () => {
         record={brakes}
         action={async () => ({
           values: brakesValues,
-          message: "This maintenance record no longer exists.",
+          message: "Something went wrong.",
         })}
         open
         onOpenChange={onOpenChange}
@@ -153,9 +153,56 @@ describe("MaintenanceRecordDialog", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     expect(
-      await screen.findByText("This maintenance record no longer exists."),
+      await screen.findByText("Something went wrong."),
     ).toBeInTheDocument();
     expect(onOpenChange).not.toHaveBeenCalled();
     expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("shows a toast when the edited record is gone", async () => {
+    const user = userEvent.setup();
+    render(
+      <MaintenanceRecordDialog
+        record={brakes}
+        action={async () => ({
+          values: brakesValues,
+          message: "This maintenance record no longer exists.",
+          gone: true,
+        })}
+        open
+        onOpenChange={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "This maintenance record no longer exists.",
+      ),
+    );
+  });
+
+  it("starts a new record from the latest mileage", () => {
+    const props = { action: vi.fn(), onOpenChange: vi.fn() };
+    const { rerender } = render(
+      <MaintenanceRecordDialog
+        {...props}
+        defaultMileage={182000}
+        open={false}
+      />,
+    );
+
+    rerender(
+      <MaintenanceRecordDialog
+        {...props}
+        defaultMileage={185500}
+        open
+      />,
+    );
+
+    expect(screen.getByRole("textbox", { name: /^Mileage/ })).toHaveValue(
+      "185,500",
+    );
   });
 });
