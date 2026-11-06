@@ -78,7 +78,7 @@ export async function updateVehicle(
   id: number,
   input: VehicleInput,
 ): Promise<MutationResult<Vehicle>> {
-  assertVehicleId(id);
+  assertPositiveId(id);
 
   const result = await sendVehicle(`/api/vehicles/${id}`, "PUT", input);
 
@@ -92,7 +92,7 @@ export async function updateVehicle(
 export async function deleteVehicle(
   id: number,
 ): Promise<{ ok: true } | MutationFailure> {
-  assertVehicleId(id);
+  assertPositiveId(id);
 
   let response: Response;
 
@@ -119,7 +119,7 @@ export async function deleteVehicle(
   return { ok: true };
 }
 
-export function assertVehicleId(id: number) {
+export function assertPositiveId(id: number) {
   if (!Number.isSafeInteger(id) || id < 1) {
     notFound();
   }

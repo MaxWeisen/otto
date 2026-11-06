@@ -7,7 +7,7 @@ import type {
 } from "@/lib/maintenance-schema";
 import {
   UNREACHABLE_FAILURE,
-  assertVehicleId,
+  assertPositiveId,
   isVehicleId,
   type MutationFailure,
   type MutationResult,
@@ -26,10 +26,10 @@ export type MaintenanceRecord = {
 };
 
 function recordsPath(vehicleId: number, recordId?: number): string {
-  assertVehicleId(vehicleId);
+  assertPositiveId(vehicleId);
 
   if (recordId !== undefined) {
-    assertVehicleId(recordId);
+    assertPositiveId(recordId);
   }
 
   const base = `/api/vehicles/${vehicleId}/maintenance`;
