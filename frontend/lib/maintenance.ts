@@ -12,10 +12,8 @@ export type MaintenanceRecord = {
   vehicle_id: number;
   type: MaintenanceType;
   description: string;
-  /** YYYY-MM-DD */
   performed_at: string;
   mileage: number | null;
-  /** A decimal string such as "49.99". */
   cost: string | null;
   notes: string | null;
   created_at: string;
@@ -23,7 +21,6 @@ export type MaintenanceRecord = {
 
 type MutationFailure = Extract<MutationResult<unknown>, { ok: false }>;
 
-// Ids arrive from the URL or, through server actions, from the browser.
 function isId(id: string | number): boolean {
   return typeof id === "number"
     ? Number.isSafeInteger(id) && id > 0
@@ -40,10 +37,6 @@ function recordsPath(vehicleId: string | number, recordId?: number): string {
   return recordId === undefined ? base : `${base}/${recordId}`;
 }
 
-/**
- * Newest first. A vehicle that does not exist or belongs to someone else
- * shows the not-found page.
- */
 export async function listMaintenanceRecords(
   vehicleId: string,
 ): Promise<MaintenanceRecord[]> {
@@ -73,8 +66,6 @@ export async function createMaintenanceRecord(
   return result;
 }
 
-// A 404 here can mean the record or the vehicle is gone, so the caller
-// decides what to show instead of the whole page turning into not-found.
 export async function updateMaintenanceRecord(
   vehicleId: number,
   recordId: number,

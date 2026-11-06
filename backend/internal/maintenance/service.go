@@ -15,7 +15,6 @@ var ErrUnauthorized = errors.New("unauthorized")
 var ErrVehicleNotFound = errors.New("vehicle not found")
 var ErrRecordNotFound = errors.New("maintenance record not found")
 
-// DB is a pool or transaction that the service can begin transactions on.
 type DB interface {
 	store.DBTX
 	Begin(ctx context.Context) (pgx.Tx, error)
@@ -44,8 +43,6 @@ func NewService(db DB) *Service {
 	}
 }
 
-// CreateRecord adds a record to the user's vehicle and, in the same
-// transaction, raises the vehicle's mileage to the record's if it is higher.
 func (s *Service) CreateRecord(
 	ctx context.Context,
 	vehicleID int64,
@@ -167,8 +164,6 @@ func (s *Service) GetRecord(
 	return record, nil
 }
 
-// UpdateRecord replaces a record on the user's vehicle and, in the same
-// transaction, raises the vehicle's mileage to the record's if it is higher.
 func (s *Service) UpdateRecord(
 	ctx context.Context,
 	vehicleID int64,
@@ -250,9 +245,6 @@ func (s *Service) DeleteRecord(
 	return nil
 }
 
-// raiseVehicleMileage brings the vehicle's mileage up to the record's, so the
-// vehicle never shows less than its latest logged reading. It never lowers
-// it.
 func raiseVehicleMileage(
 	ctx context.Context,
 	q *store.Queries,
@@ -270,8 +262,6 @@ func raiseVehicleMileage(
 	})
 }
 
-// inTx runs fn with queries bound to a new transaction, committing only if fn
-// succeeds.
 func (s *Service) inTx(
 	ctx context.Context,
 	fn func(q *store.Queries) error,

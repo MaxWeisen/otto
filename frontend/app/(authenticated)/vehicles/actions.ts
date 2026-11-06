@@ -55,8 +55,7 @@ export async function createVehicleAction(
     return failureState(values, result);
   }
 
-  // Refresh every page under the vehicles layout. The path names the route
-  // group because Next derives layout cache tags from the route file path.
+  // Layout cache tags include the route group, so the path must name it.
   revalidatePath("/(authenticated)/vehicles", "layout");
   redirect("/vehicles?status=created");
 }
