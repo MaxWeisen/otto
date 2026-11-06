@@ -102,7 +102,7 @@ describe("createMaintenanceRecordAction", () => {
 });
 
 describe("updateMaintenanceRecordAction", () => {
-  it("explains a record that is gone and refreshes the vehicle pages", async () => {
+  it("marks a record that is gone and refreshes the vehicle pages", async () => {
     server.use(
       http.get(`${API_URL}/api/vehicles/7`, () => HttpResponse.json({ id: 7 })),
       http.put(`${API_URL}/api/vehicles/7/maintenance/31`, () =>
@@ -123,6 +123,7 @@ describe("updateMaintenanceRecordAction", () => {
     expect(state).toEqual({
       values,
       message: "This maintenance record no longer exists.",
+      gone: true,
     });
     expect(revalidatePath).toHaveBeenCalledOnce();
   });

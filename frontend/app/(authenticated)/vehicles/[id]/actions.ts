@@ -21,6 +21,7 @@ export type MaintenanceFormState = {
   errors?: MaintenanceFieldErrors;
   message?: string;
   saved?: boolean;
+  gone?: boolean;
 };
 
 export type DeleteMaintenanceResult =
@@ -96,6 +97,7 @@ export async function updateMaintenanceRecordAction(
   if (!result.ok) {
     if (result.status === 404) {
       await refreshAfterRecordGone(vehicleId);
+      return { values, message: RECORD_GONE, gone: true };
     }
 
     return failureState(values, result);

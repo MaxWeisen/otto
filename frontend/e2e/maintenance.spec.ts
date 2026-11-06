@@ -260,6 +260,38 @@ test("shows not-found when adding to a vehicle deleted elsewhere", async ({
   expect(await page.getByText("Could not add the record").count()).toBe(0);
 });
 
+test("explains an edit to a record deleted elsewhere", async ({
+  page,
+  request,
+}) => {
+  const id = await insertVehicle(accord);
+  const recordId = await insertMaintenanceRecord(id, {
+    type: "inspection",
+    description: "State inspection",
+    performed_at: "2025-03-14",
+  });
+
+  await page.goto(`/vehicles/${id}`);
+  await page
+    .getByRole("button", { name: "Edit Inspection from Mar 14, 2025" })
+    .click();
+
+  const deleted = await request.delete(
+    `http://localhost:${E2E_BACKEND_PORT}/api/vehicles/${id}/maintenance/${recordId}`,
+  );
+  expect(deleted.status()).toBe(204);
+
+  await page
+    .getByRole("dialog", { name: "Edit maintenance record" })
+    .getByRole("button", { name: "Save" })
+    .click();
+
+  await expect(
+    page.getByText("This maintenance record no longer exists."),
+  ).toBeVisible();
+  await expect(page.getByText("No maintenance logged yet")).toBeVisible();
+});
+
 test("shows not-found when deleting from a vehicle deleted elsewhere", async ({
   page,
   request,
