@@ -7,6 +7,7 @@ import {
   createMaintenanceRecordAction,
   type MaintenanceFormState,
 } from "@/app/(authenticated)/vehicles/[id]/actions";
+import { EmptyState } from "@/components/empty-state";
 import { MaintenanceRecordDialog } from "@/components/maintenance-record-dialog";
 import type { TimelineRecord } from "@/components/maintenance-record-item";
 import { MaintenanceTimeline } from "@/components/maintenance-timeline";
@@ -19,14 +20,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
 import type { MaintenanceRecord } from "@/lib/maintenance";
 import {
   readMaintenanceFormValues,
@@ -126,24 +119,18 @@ export function MaintenanceSection({
             </RemoveMaintenanceRecordContext>
           </div>
         ) : (
-          <Empty className="border py-10">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <WrenchIcon />
-              </EmptyMedia>
-              <EmptyTitle>No maintenance logged yet</EmptyTitle>
-              <EmptyDescription>
-                Keep a history of oil changes, repairs and inspections for this
-                vehicle.
-              </EmptyDescription>
-            </EmptyHeader>
-            <EmptyContent>
+          <EmptyState
+            className="border py-10"
+            icon={<WrenchIcon />}
+            title="No maintenance logged yet"
+            description="Keep a history of oil changes, repairs and inspections for this vehicle."
+            action={
               <Button onClick={() => setAddOpen(true)}>
                 <PlusIcon data-icon="inline-start" />
                 Add your first record
               </Button>
-            </EmptyContent>
-          </Empty>
+            }
+          />
         )}
       </CardContent>
       <MaintenanceRecordDialog

@@ -3,15 +3,8 @@
 import { useRouter } from "next/navigation";
 import { startTransition, useEffect } from "react";
 import { ArrowClockwiseIcon, WarningCircleIcon } from "@phosphor-icons/react";
+import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
 
 export type PageErrorProps = {
   error: Error & { digest?: string };
@@ -27,17 +20,12 @@ export function PageError({ error, reset }: PageErrorProps) {
   }, [error]);
 
   return (
-    <Empty className="border py-16">
-      <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <WarningCircleIcon />
-        </EmptyMedia>
-        <EmptyTitle>Something went wrong</EmptyTitle>
-        <EmptyDescription>
-          We couldn&apos;t load this page. Check your connection and try again.
-        </EmptyDescription>
-      </EmptyHeader>
-      <EmptyContent>
+    <EmptyState
+      className="border py-16"
+      icon={<WarningCircleIcon />}
+      title="Something went wrong"
+      description="We couldn't load this page. Check your connection and try again."
+      action={
         <Button
           onClick={() =>
             startTransition(() => {
@@ -49,7 +37,7 @@ export function PageError({ error, reset }: PageErrorProps) {
           <ArrowClockwiseIcon />
           Try again
         </Button>
-      </EmptyContent>
-    </Empty>
+      }
+    />
   );
 }
