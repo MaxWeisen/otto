@@ -19,7 +19,6 @@ export default defineConfig({
     include: ["test/**/*.test.{ts,tsx}"],
     env: {
       NEXT_PUBLIC_API_URL: "http://api.test",
-      TZ: "UTC",
     },
   },
 });
