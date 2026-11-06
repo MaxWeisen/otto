@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useOptimistic, useState, useTransition } from "react";
+import { startTransition, useId, useState } from "react";
 import { unstable_rethrow } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -16,6 +16,7 @@ import {
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { MaintenanceRecordDialog } from "@/components/maintenance-record-dialog";
 import { MaintenanceTypeIcon } from "@/components/maintenance-type-icon";
+import { useRemoveMaintenanceRecord } from "@/components/remove-maintenance-record-context";
 import { Button } from "@/components/ui/button";
 import type { MaintenanceRecord } from "@/lib/maintenance";
 import {
@@ -35,8 +36,7 @@ export function MaintenanceRecordItem({ record }: { record: TimelineRecord }) {
   const [editOpen, setEditOpen] = useState(false);
   const [editSession, setEditSession] = useState(0);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [deleting, setDeleting] = useOptimistic(false);
-  const [, startTransition] = useTransition();
+  const removeRecord = useRemoveMaintenanceRecord();
   const notesId = useId();
   const name = formatRecordName(record);
   const details = [
@@ -47,7 +47,7 @@ export function MaintenanceRecordItem({ record }: { record: TimelineRecord }) {
   function deleteRecord() {
     setConfirmOpen(false);
     startTransition(async () => {
-      setDeleting(true);
+      removeRecord(record.id);
 
       let result: DeleteMaintenanceResult;
 
@@ -72,10 +72,6 @@ export function MaintenanceRecordItem({ record }: { record: TimelineRecord }) {
         });
       }
     });
-  }
-
-  if (deleting) {
-    return null;
   }
 
   return (
