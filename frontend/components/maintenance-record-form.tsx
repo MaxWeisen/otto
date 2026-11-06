@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { startTransition, useActionState, useEffect, useRef } from "react";
 import { unstable_rethrow } from "next/navigation";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -100,7 +100,11 @@ export function MaintenanceRecordForm({
         </DialogHeader>
         <form
           ref={form}
-          action={formAction}
+          onSubmit={(event) => {
+            event.preventDefault();
+            const formData = new FormData(event.currentTarget);
+            startTransition(() => formAction(formData));
+          }}
           aria-label={title}
           className="grid gap-4 sm:grid-cols-2"
         >

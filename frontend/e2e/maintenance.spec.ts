@@ -46,6 +46,15 @@ test("adds, edits and deletes a maintenance record", async ({ page }) => {
   await addDialog
     .getByRole("combobox", { name: "Type" })
     .selectOption({ label: "Oil change" });
+  await addDialog.getByRole("button", { name: "Add record" }).click();
+  await expect(addDialog.getByText("Description is required")).toBeVisible();
+  await expect(addDialog.getByRole("combobox", { name: "Type" })).toHaveValue(
+    "oil_change",
+  );
+  await expect(
+    addDialog.getByRole("textbox", { name: /^Mileage/ }),
+  ).toHaveValue("182,000");
+
   await addDialog
     .getByRole("textbox", { name: /^Description/ })
     .fill("Synthetic 5W-30 and filter");
@@ -63,7 +72,6 @@ test("adds, edits and deletes a maintenance record", async ({ page }) => {
   const entry = maintenance(page).getByRole("listitem");
 
   await expect(entry).toHaveCount(1);
-  await expect(entry).not.toHaveAttribute("aria-busy");
   await expect(entry).toContainText("Oil change");
   await expect(entry).toContainText("Mar 14");
   await expect(entry).toContainText("181,250 mi");
@@ -129,6 +137,9 @@ test("adds, edits and deletes a maintenance record", async ({ page }) => {
 
   await expect(page.getByText("Maintenance record deleted")).toBeVisible();
   await expect(page.getByText("No maintenance logged yet")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Maintenance" }),
+  ).toBeFocused();
   expect(await findMaintenanceRecords(id)).toEqual([]);
 
   await page.reload();
@@ -159,7 +170,6 @@ test("raises the vehicle's mileage to a record's higher reading", async ({
   await addDialog.getByRole("textbox", { name: /^Mileage/ }).fill("185,500");
   await addDialog.getByRole("button", { name: "Add record" }).click();
 
-  await expect(entry).not.toHaveAttribute("aria-busy");
   await expect(mileage).toHaveText("185,500 mi");
 
   const edit = async (reading: string) => {

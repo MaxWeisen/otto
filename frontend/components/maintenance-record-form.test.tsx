@@ -60,6 +60,32 @@ describe("MaintenanceRecordForm", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it("keeps the chosen type after another field is rejected", async () => {
+    const user = userEvent.setup();
+    render(
+      <MaintenanceRecordForm
+        action={async (_state, formData) => ({
+          values: Object.fromEntries(formData) as Record<string, string>,
+          errors: { description: "Description is required" },
+        })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "Type" }),
+      "Brakes",
+    );
+    await user.click(screen.getByRole("button", { name: "Add record" }));
+
+    expect(
+      await screen.findByText("Description is required"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Type" })).toHaveValue(
+      "brakes",
+    );
+  });
+
   it("closes with a toast once saved", async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
