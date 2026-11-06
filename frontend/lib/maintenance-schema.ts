@@ -179,6 +179,30 @@ export function maintenanceApiErrors(
   };
 }
 
+const mileageFormatter = new Intl.NumberFormat("en-US");
+
+/** A record's form values, or a new record's starting from today. */
+export function maintenanceFormValues(
+  record:
+    | Pick<
+        MaintenanceInput,
+        "type" | "performed_at" | "description" | "mileage" | "cost" | "notes"
+      >
+    | undefined,
+  defaultMileage: number | null,
+): MaintenanceFormValues {
+  const mileage = record ? record.mileage : defaultMileage;
+
+  return {
+    type: record?.type ?? "",
+    performed_at: record?.performed_at ?? today(),
+    description: record?.description ?? "",
+    mileage: mileage === null ? "" : mileageFormatter.format(mileage),
+    cost: record?.cost ?? "",
+    notes: record?.notes ?? "",
+  };
+}
+
 export function readMaintenanceFormValues(
   formData: FormData,
 ): MaintenanceFormValues {
