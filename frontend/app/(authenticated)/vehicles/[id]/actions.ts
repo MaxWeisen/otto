@@ -14,7 +14,7 @@ import {
   type MaintenanceFieldErrors,
   type MaintenanceFormValues,
 } from "@/lib/maintenance-schema";
-import type { MutationResult } from "@/lib/vehicles";
+import { getVehicle, type MutationResult } from "@/lib/vehicles";
 
 export type MaintenanceFormState = {
   values: MaintenanceFormValues;
@@ -27,6 +27,13 @@ export type DeleteMaintenanceResult =
   { ok: true } | { ok: false; error: string };
 
 const RECORD_GONE = "This maintenance record no longer exists.";
+
+// A 404 means the record or the whole vehicle is gone, and a gone vehicle
+// shows the not-found page.
+async function refreshAfterRecordGone(vehicleId: number) {
+  await getVehicle(String(vehicleId));
+  revalidatePath("/(authenticated)/vehicles", "layout");
+}
 
 function failureState(
   values: MaintenanceFormValues,
@@ -87,9 +94,8 @@ export async function updateMaintenanceRecordAction(
   );
 
   if (!result.ok) {
-    // A missing record, or vehicle, disappears from the page on refresh.
     if (result.status === 404) {
-      revalidatePath("/(authenticated)/vehicles", "layout");
+      await refreshAfterRecordGone(vehicleId);
     }
 
     return failureState(values, result);
@@ -106,11 +112,15 @@ export async function deleteMaintenanceRecordAction(
 ): Promise<DeleteMaintenanceResult> {
   const result = await deleteMaintenanceRecord(vehicleId, recordId);
 
-  if (!result.ok && result.status !== 404) {
-    return { ok: false, error: result.error };
+  if (result.ok) {
+    revalidatePath("/(authenticated)/vehicles", "layout");
+    return { ok: true };
   }
 
-  revalidatePath("/(authenticated)/vehicles", "layout");
+  if (result.status === 404) {
+    await refreshAfterRecordGone(vehicleId);
+    return { ok: false, error: RECORD_GONE };
+  }
 
-  return result.ok ? { ok: true } : { ok: false, error: RECORD_GONE };
+  return { ok: false, error: result.error };
 }
