@@ -1,20 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { unstable_rethrow } from "next/navigation";
 import { toast } from "sonner";
-import { SpinnerIcon } from "@phosphor-icons/react";
 import type { DeleteVehicleState } from "@/app/(authenticated)/vehicles/actions";
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormAlert } from "@/components/vehicle-fields";
 import type { Vehicle } from "@/lib/vehicles";
 
@@ -33,7 +23,15 @@ export function DeleteVehicleDialog({
 }: DeleteVehicleDialogProps) {
   const [message, setMessage] = useState<string>();
   const [pending, startTransition] = useTransition();
-  const confirmButton = useRef<HTMLButtonElement>(null);
+  const [wasOpen, setWasOpen] = useState(open);
+
+  if (open !== wasOpen) {
+    setWasOpen(open);
+
+    if (open) {
+      setMessage(undefined);
+    }
+  }
 
   function confirm() {
     setMessage(undefined);
@@ -55,58 +53,18 @@ export function DeleteVehicleDialog({
     });
   }
 
-  // The confirm button is still disabled when the failure is set.
-  useEffect(() => {
-    if (message) {
-      confirmButton.current?.focus();
-    }
-  }, [message]);
-
-  function handleOpenChange(nextOpen: boolean) {
-    if (!pending) {
-      onOpenChange(nextOpen);
-    }
-  }
-
   return (
-    <AlertDialog
+    <ConfirmDialog
       open={open}
-      onOpenChange={handleOpenChange}
-      onOpenChangeComplete={(isOpen) => {
-        if (!isOpen) {
-          setMessage(undefined);
-        }
-      }}
+      onOpenChange={onOpenChange}
+      title={`Delete ${vehicle.year} ${vehicle.make} ${vehicle.model}?`}
+      description="This permanently deletes the vehicle and all of its maintenance records. It cannot be undone."
+      confirmLabel="Delete vehicle"
+      destructive
+      pending={pending}
+      onConfirm={confirm}
     >
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>
-            Delete {vehicle.year} {vehicle.make} {vehicle.model}?
-          </AlertDialogTitle>
-          <AlertDialogDescription>
-            This permanently deletes the vehicle and all of its maintenance
-            records. It cannot be undone.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        {message && <FormAlert message={message} />}
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
-          <Button
-            ref={confirmButton}
-            variant="destructive"
-            onClick={confirm}
-            disabled={pending}
-          >
-            {pending && (
-              <SpinnerIcon
-                data-icon="inline-start"
-                className="animate-spin"
-              />
-            )}
-            Delete vehicle
-          </Button>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+      {message && <FormAlert message={message} />}
+    </ConfirmDialog>
   );
 }

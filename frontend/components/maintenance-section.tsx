@@ -22,16 +22,7 @@ import {
   MaintenanceTimeline,
   type TimelineRecord,
 } from "@/components/maintenance-timeline";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -335,33 +326,18 @@ export function MaintenanceSection({
         />
       )}
 
-      <AlertDialog
+      <ConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
-      >
-        <AlertDialogContent
-          finalFocus={() =>
-            deleteConfirmed.current ? addButton.current : true
-          }
-        >
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this record?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {deleting &&
-                `${recordName(deleting)} will be permanently deleted.`}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              onClick={() => deleting && deleteRecord(deleting)}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        title="Delete this record?"
+        description={
+          deleting && `${recordName(deleting)} will be permanently deleted.`
+        }
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => deleting && deleteRecord(deleting)}
+        finalFocus={() => (deleteConfirmed.current ? addButton.current : true)}
+      />
     </Card>
   );
 }
