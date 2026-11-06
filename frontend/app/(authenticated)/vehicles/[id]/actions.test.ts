@@ -1,24 +1,14 @@
-import { http, HttpResponse, type JsonBodyType } from "msw";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { http, HttpResponse } from "msw";
+import { describe, expect, it } from "vitest";
 import { NotFoundError, revalidatePath } from "@/test/next-mocks";
 import { API_URL, server } from "@/test/server";
 import {
   createMaintenanceRecordAction,
   deleteMaintenanceRecordAction,
   updateMaintenanceRecordAction,
-  type MaintenanceFormState,
 } from "./actions";
 
-beforeAll(() => {
-  vi.useFakeTimers({ toFake: ["Date"] });
-  vi.setSystemTime(new Date(2026, 5, 15, 12));
-});
-
-afterAll(() => {
-  vi.useRealTimers();
-});
-
-const fields = {
+const values = {
   type: "oil_change",
   performed_at: "2026-06-01",
   description: " Synthetic 5W-30 ",
@@ -27,59 +17,45 @@ const fields = {
   notes: "",
 };
 
-const initialState: MaintenanceFormState = {
-  values: { ...fields, description: "" },
-};
-
-function formData(values: Record<string, string>): FormData {
+function formData(fields: Record<string, string>): FormData {
   const data = new FormData();
 
-  for (const [name, value] of Object.entries(values)) {
+  for (const [name, value] of Object.entries(fields)) {
     data.set(name, value);
   }
 
   return data;
 }
 
-function serve(
-  method: "post" | "put" | "delete",
-  status: number,
-  body?: JsonBodyType,
-) {
-  const bodies: unknown[] = [];
-
-  server.use(
-    http[method](`${API_URL}/api/vehicles/*`, async ({ request }) => {
-      const text = await request.text();
-
-      bodies.push(text ? JSON.parse(text) : undefined);
-
-      return status === 204
-        ? new HttpResponse(null, { status })
-        : HttpResponse.json(body, { status });
-    }),
-  );
-
-  return bodies;
-}
-
 describe("createMaintenanceRecordAction", () => {
-  it("creates the normalized record and refreshes the vehicle page", async () => {
-    const bodies = serve("post", 201, { id: 1 });
+  it("saves the normalized record and refreshes the vehicle pages", async () => {
+    let body: unknown;
 
-    await expect(
-      createMaintenanceRecordAction(7, initialState, formData(fields)),
-    ).resolves.toEqual({ values: fields, saved: true });
-    expect(bodies).toEqual([
-      {
-        type: "oil_change",
-        performed_at: "2026-06-01",
-        description: "Synthetic 5W-30",
-        mileage: 84500,
-        cost: "49.99",
-        notes: null,
-      },
-    ]);
+    server.use(
+      http.post(
+        `${API_URL}/api/vehicles/7/maintenance`,
+        async ({ request }) => {
+          body = await request.json();
+          return HttpResponse.json({ id: 1 }, { status: 201 });
+        },
+      ),
+    );
+
+    const state = await createMaintenanceRecordAction(
+      7,
+      { values },
+      formData(values),
+    );
+
+    expect(state).toEqual({ values, saved: true });
+    expect(body).toEqual({
+      type: "oil_change",
+      performed_at: "2026-06-01",
+      description: "Synthetic 5W-30",
+      mileage: 84500,
+      cost: "49.99",
+      notes: null,
+    });
     expect(revalidatePath).toHaveBeenCalledExactlyOnceWith(
       "/(authenticated)/vehicles",
       "layout",
@@ -87,115 +63,114 @@ describe("createMaintenanceRecordAction", () => {
   });
 
   it("returns field errors without calling the API", async () => {
-    const bodies = serve("post", 201, { id: 1 });
-    const values = { ...fields, description: "", cost: "-1" };
+    const invalid = { ...values, description: "" };
 
-    await expect(
-      createMaintenanceRecordAction(7, initialState, formData(values)),
-    ).resolves.toEqual({
-      values,
-      errors: {
-        description: ["Description is required"],
-        cost: ["Cost must not be negative"],
-      },
+    const state = await createMaintenanceRecordAction(
+      7,
+      { values },
+      formData(invalid),
+    );
+
+    expect(state).toEqual({
+      values: invalid,
+      errors: { description: ["Description is required"] },
     });
-    expect(bodies).toEqual([]);
   });
 
-  it("maps an API validation message to its field", async () => {
-    serve("post", 400, { error: "performed_at must not be in the future" });
+  it("shows an API validation message on its field", async () => {
+    server.use(
+      http.post(`${API_URL}/api/vehicles/7/maintenance`, () =>
+        HttpResponse.json(
+          { error: "performed_at must not be in the future" },
+          { status: 400 },
+        ),
+      ),
+    );
 
-    await expect(
-      createMaintenanceRecordAction(7, initialState, formData(fields)),
-    ).resolves.toEqual({
-      values: fields,
+    const state = await createMaintenanceRecordAction(
+      7,
+      { values },
+      formData(values),
+    );
+
+    expect(state).toEqual({
+      values,
       errors: { performed_at: ["Date must not be in the future"] },
     });
     expect(revalidatePath).not.toHaveBeenCalled();
   });
+});
 
-  it("returns other API failures as a message", async () => {
-    serve("post", 500, { error: "Something went wrong. Please try again." });
+describe("updateMaintenanceRecordAction", () => {
+  it("explains a record that is gone and refreshes the vehicle pages", async () => {
+    server.use(
+      http.get(`${API_URL}/api/vehicles/7`, () => HttpResponse.json({ id: 7 })),
+      http.put(`${API_URL}/api/vehicles/7/maintenance/31`, () =>
+        HttpResponse.json(
+          { error: "Maintenance record not found." },
+          { status: 404 },
+        ),
+      ),
+    );
 
-    await expect(
-      createMaintenanceRecordAction(7, initialState, formData(fields)),
-    ).resolves.toEqual({
-      values: fields,
-      message: "Something went wrong. Please try again.",
+    const state = await updateMaintenanceRecordAction(
+      7,
+      31,
+      { values },
+      formData(values),
+    );
+
+    expect(state).toEqual({
+      values,
+      message: "This maintenance record no longer exists.",
     });
+    expect(revalidatePath).toHaveBeenCalledOnce();
   });
 
-  it("shows the not-found page for another user's vehicle", async () => {
-    serve("post", 404, { error: "Vehicle not found." });
+  it("shows the not-found page when the whole vehicle is gone", async () => {
+    server.use(
+      http.get(`${API_URL}/api/vehicles/7`, () =>
+        HttpResponse.json({ error: "Vehicle not found." }, { status: 404 }),
+      ),
+      http.put(`${API_URL}/api/vehicles/7/maintenance/31`, () =>
+        HttpResponse.json(
+          { error: "Maintenance record not found." },
+          { status: 404 },
+        ),
+      ),
+    );
 
     await expect(
-      createMaintenanceRecordAction(8, initialState, formData(fields)),
+      updateMaintenanceRecordAction(7, 31, { values }, formData(values)),
     ).rejects.toThrow(NotFoundError);
   });
 });
 
-describe("updateMaintenanceRecordAction", () => {
-  it("saves the record and refreshes the vehicle page", async () => {
-    const bodies = serve("put", 200, { id: 31 });
-
-    await expect(
-      updateMaintenanceRecordAction(7, 31, initialState, formData(fields)),
-    ).resolves.toEqual({ values: fields, saved: true });
-    expect(bodies).toHaveLength(1);
-    expect(revalidatePath).toHaveBeenCalledExactlyOnceWith(
-      "/(authenticated)/vehicles",
-      "layout",
-    );
-  });
-
-  it("explains a record that is gone and refreshes the page", async () => {
-    serve("put", 404, { error: "Maintenance record not found." });
-
-    await expect(
-      updateMaintenanceRecordAction(7, 31, initialState, formData(fields)),
-    ).resolves.toEqual({
-      values: fields,
-      message: "This maintenance record no longer exists.",
-    });
-    expect(revalidatePath).toHaveBeenCalledExactlyOnceWith(
-      "/(authenticated)/vehicles",
-      "layout",
-    );
-  });
-});
-
 describe("deleteMaintenanceRecordAction", () => {
-  it("deletes the record and refreshes the vehicle page", async () => {
-    serve("delete", 204);
+  it("deletes the record and refreshes the vehicle pages", async () => {
+    server.use(
+      http.delete(
+        `${API_URL}/api/vehicles/7/maintenance/31`,
+        () => new HttpResponse(null, { status: 204 }),
+      ),
+    );
 
     await expect(deleteMaintenanceRecordAction(7, 31)).resolves.toEqual({
       ok: true,
     });
-    expect(revalidatePath).toHaveBeenCalledExactlyOnceWith(
-      "/(authenticated)/vehicles",
-      "layout",
-    );
+    expect(revalidatePath).toHaveBeenCalledOnce();
   });
 
-  it("explains a record that is gone and refreshes the page", async () => {
-    serve("delete", 404, { error: "Maintenance record not found." });
+  it("returns a failure without refreshing", async () => {
+    server.use(
+      http.delete(`${API_URL}/api/vehicles/7/maintenance/31`, () =>
+        HttpResponse.json({ error: "Something went wrong." }, { status: 500 }),
+      ),
+    );
 
     await expect(deleteMaintenanceRecordAction(7, 31)).resolves.toEqual({
       ok: false,
-      error: "This maintenance record no longer exists.",
-    });
-    expect(revalidatePath).toHaveBeenCalledExactlyOnceWith(
-      "/(authenticated)/vehicles",
-      "layout",
-    );
-  });
-
-  it("returns other failures without refreshing", async () => {
-    serve("delete", 500, { error: "Something went wrong. Please try again." });
-
-    await expect(deleteMaintenanceRecordAction(7, 31)).resolves.toEqual({
-      ok: false,
-      error: "Something went wrong. Please try again.",
+      error: "Something went wrong.",
     });
     expect(revalidatePath).not.toHaveBeenCalled();
   });

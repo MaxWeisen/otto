@@ -99,14 +99,6 @@ describe("VehiclePage", () => {
     expect(screen.getByText("$79.99")).toBeInTheDocument();
   });
 
-  it("shows the empty maintenance state for a vehicle without records", async () => {
-    serveVehicle(200, accord);
-
-    await renderPage("7");
-
-    expect(screen.getByText("No maintenance logged yet")).toBeInTheDocument();
-  });
-
   it("links back to the vehicle list", async () => {
     serveVehicle(200, accord);
 

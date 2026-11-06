@@ -229,6 +229,68 @@ test("groups records by year, newest first", async ({ page }) => {
   ]);
 });
 
+test("shows not-found when adding to a vehicle deleted elsewhere", async ({
+  page,
+  request,
+}) => {
+  const id = await insertVehicle(accord);
+
+  await page.goto(`/vehicles/${id}`);
+  await page.getByRole("button", { name: "Add your first record" }).click();
+
+  const addDialog = page.getByRole("dialog", {
+    name: "Add maintenance record",
+  });
+
+  await addDialog.getByRole("combobox", { name: "Type" }).click();
+  await page.getByRole("option", { name: "Oil change" }).click();
+  await addDialog
+    .getByRole("textbox", { name: /^Description/ })
+    .fill("Synthetic 5W-30");
+
+  const deleted = await request.delete(
+    `http://localhost:${E2E_BACKEND_PORT}/api/vehicles/${id}`,
+  );
+  expect(deleted.status()).toBe(204);
+
+  await addDialog.getByRole("button", { name: "Add record" }).click();
+
+  await expect(page.getByText("Vehicle not found")).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  expect(await page.getByText("Could not add the record").count()).toBe(0);
+});
+
+test("shows not-found when deleting from a vehicle deleted elsewhere", async ({
+  page,
+  request,
+}) => {
+  const id = await insertVehicle(accord);
+  await insertMaintenanceRecord(id, {
+    type: "inspection",
+    description: "State inspection",
+    performed_at: "2025-03-14",
+  });
+
+  await page.goto(`/vehicles/${id}`);
+
+  const deleted = await request.delete(
+    `http://localhost:${E2E_BACKEND_PORT}/api/vehicles/${id}`,
+  );
+  expect(deleted.status()).toBe(204);
+
+  await page
+    .getByRole("button", { name: "Delete Inspection from Mar 14, 2025" })
+    .click();
+  await page
+    .getByRole("alertdialog", { name: "Delete this record?" })
+    .getByRole("button", { name: "Delete" })
+    .click();
+
+  await expect(page.getByText("Vehicle not found")).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  expect(await page.getByText("Could not delete the record").count()).toBe(0);
+});
+
 test("cannot read or change another user's maintenance records", async ({
   page,
   request,
