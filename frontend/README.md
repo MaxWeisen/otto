@@ -9,7 +9,7 @@ Open [http://localhost:4000](http://localhost:4000) with your browser to see the
 
 Set these in `frontend/.env.local`.
 
-- `NEXT_PUBLIC_API_URL` - base URL of the backend API, used for sign-in, logout and every server-side API call, including the vehicles pages and the `/api/vpic` route handlers that proxy vehicle data lookups.
+- `NEXT_PUBLIC_API_URL` - base URL of the backend API, used for sign-in, logout and every server-side API call, including the vehicles pages, their maintenance records and the `/api/vpic` route handlers that proxy vehicle data lookups.
   A 401 from the backend sends the visitor to the login page.
 - `COOKIE_DOMAIN` - optional; set it to the same value as the backend's `COOKIE_DOMAIN` so logout clears the `otto_session_token` cookie on that domain.
   Leave it unset when the backend does not set a cookie domain.
