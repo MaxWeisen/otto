@@ -205,4 +205,52 @@ describe("MaintenanceRecordDialog", () => {
       "185,500",
     );
   });
+  it("keeps a reopened add dialog's input when an earlier save finishes", async () => {
+    const user = userEvent.setup();
+    const saving = Promise.withResolvers<MaintenanceFormState>();
+    const onOpenChange = vi.fn();
+    const props = { action: () => saving.promise, onOpenChange };
+    const { rerender } = render(
+      <MaintenanceRecordDialog
+        {...props}
+        open
+      />,
+    );
+
+    await user.click(screen.getByRole("combobox", { name: "Type" }));
+    await user.click(await screen.findByRole("option", { name: "Brakes" }));
+    await user.type(
+      screen.getByRole("textbox", { name: /^Description/ }),
+      "Front pads",
+    );
+    await user.click(screen.getByRole("button", { name: "Add record" }));
+    rerender(
+      <MaintenanceRecordDialog
+        {...props}
+        open={false}
+      />,
+    );
+    rerender(
+      <MaintenanceRecordDialog
+        {...props}
+        open
+      />,
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: /^Description/ }),
+      "Oil",
+    );
+
+    saving.resolve({ values: brakesValues, saved: true });
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith("Maintenance record added"),
+    );
+    expect(screen.getByRole("textbox", { name: /^Description/ })).toHaveValue(
+      "Oil",
+    );
+
+    onOpenChange.mockClear();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
 });

@@ -171,7 +171,7 @@ export function maintenanceApiErrors(
   };
 }
 
-const mileageFormatter = new Intl.NumberFormat("en-US");
+export const mileageFormatter = new Intl.NumberFormat("en-US");
 
 export function maintenanceFormValues(
   record:

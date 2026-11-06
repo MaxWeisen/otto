@@ -5,7 +5,13 @@ import type {
   MaintenanceInput,
   MaintenanceType,
 } from "@/lib/maintenance-schema";
-import type { MutationResult } from "@/lib/vehicles";
+import {
+  UNREACHABLE_FAILURE,
+  assertVehicleId,
+  isVehicleId,
+  type MutationFailure,
+  type MutationResult,
+} from "@/lib/vehicles";
 
 export type MaintenanceRecord = {
   id: number;
@@ -19,17 +25,11 @@ export type MaintenanceRecord = {
   created_at: string;
 };
 
-type MutationFailure = Extract<MutationResult<unknown>, { ok: false }>;
+function recordsPath(vehicleId: number, recordId?: number): string {
+  assertVehicleId(vehicleId);
 
-function isId(id: string | number): boolean {
-  return typeof id === "number"
-    ? Number.isSafeInteger(id) && id > 0
-    : /^[1-9]\d*$/.test(id) && Number.isSafeInteger(Number(id));
-}
-
-function recordsPath(vehicleId: string | number, recordId?: number): string {
-  if (!isId(vehicleId) || (recordId !== undefined && !isId(recordId))) {
-    notFound();
+  if (recordId !== undefined) {
+    assertVehicleId(recordId);
   }
 
   const base = `/api/vehicles/${vehicleId}/maintenance`;
@@ -40,7 +40,11 @@ function recordsPath(vehicleId: string | number, recordId?: number): string {
 export async function listMaintenanceRecords(
   vehicleId: string,
 ): Promise<MaintenanceRecord[]> {
-  const response = await apiFetch(recordsPath(vehicleId));
+  if (!isVehicleId(vehicleId)) {
+    notFound();
+  }
+
+  const response = await apiFetch(recordsPath(Number(vehicleId)));
 
   if (response.status === 404) {
     notFound();
@@ -132,10 +136,6 @@ async function request(
   } catch (error) {
     unstable_rethrow(error);
 
-    return {
-      ok: false,
-      status: 502,
-      error: "Could not reach the server. Please try again.",
-    };
+    return UNREACHABLE_FAILURE;
   }
 }

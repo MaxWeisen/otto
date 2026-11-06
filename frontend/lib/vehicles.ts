@@ -19,7 +19,7 @@ export type MutationResult<T> = { ok: true; data: T } | MutationFailure;
 
 export type MutationFailure = { ok: false; status: number; error: string };
 
-const UNREACHABLE_FAILURE: MutationFailure = {
+export const UNREACHABLE_FAILURE: MutationFailure = {
   ok: false,
   status: 502,
   error: "Could not reach the server. Please try again.",
@@ -58,7 +58,7 @@ export const getVehicle = cache(async (id: string): Promise<Vehicle> => {
   return response.json();
 });
 
-function isVehicleId(id: string): boolean {
+export function isVehicleId(id: string): boolean {
   return /^[1-9]\d*$/.test(id) && Number.isSafeInteger(Number(id));
 }
 
@@ -119,7 +119,7 @@ export async function deleteVehicle(
   return { ok: true };
 }
 
-function assertVehicleId(id: number) {
+export function assertVehicleId(id: number) {
   if (!Number.isSafeInteger(id) || id < 1) {
     notFound();
   }

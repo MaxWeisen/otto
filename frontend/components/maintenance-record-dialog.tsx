@@ -90,19 +90,30 @@ export function MaintenanceRecordDialog({
   const [shown, setShown] = useState({ state, open });
   const [formKey, setFormKey] = useState(0);
 
-  if (state !== shown.state || open !== shown.open) {
+  const editPending = pending && record !== undefined;
+
+  if (
+    open !== shown.open ||
+    (state !== shown.state && (record !== undefined || !open))
+  ) {
     setShown({ state, open });
     setFormKey(formKey + 1);
     setClientErrors(undefined);
   }
 
-  useLayoutEffect(() => firstInvalidInput(state.errors)?.focus(), [state]);
+  const shownState = shown.state;
+
+  useLayoutEffect(
+    () => firstInvalidInput(shownState.errors)?.focus(),
+    [shownState],
+  );
 
   const values =
-    state === initialState || state.saved
+    shownState === initialState || shownState.saved
       ? maintenanceFormValues(record, defaultMileage)
-      : state.values;
-  const errors = clientErrors ?? (state.saved ? undefined : state.errors);
+      : shownState.values;
+  const errors =
+    clientErrors ?? (shownState.saved ? undefined : shownState.errors);
   const title = record ? "Edit maintenance record" : "Add maintenance record";
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -122,7 +133,7 @@ export function MaintenanceRecordDialog({
   return (
     <Dialog
       open={open}
-      onOpenChange={(next) => !pending && onOpenChange(next)}
+      onOpenChange={(next) => !editPending && onOpenChange(next)}
     >
       <DialogContent
         className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg"
@@ -148,15 +159,15 @@ export function MaintenanceRecordDialog({
             values={values}
             errors={errors}
           />
-          {!state.saved && state.message && (
-            <FormAlert message={state.message} />
+          {!shownState.saved && shownState.message && (
+            <FormAlert message={shownState.message} />
           )}
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
-              disabled={pending}
+              disabled={editPending}
             >
               Cancel
             </Button>
