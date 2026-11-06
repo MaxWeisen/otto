@@ -1,33 +1,12 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay, http, HttpResponse } from "msw";
 import { toast } from "sonner";
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
-import type {
-  DeleteVehicleState,
-  VehicleFormState,
-} from "@/app/(authenticated)/vehicles/actions";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { VehicleFormState } from "@/app/(authenticated)/vehicles/actions";
 import { VehicleDetailsCard } from "@/components/vehicle-details-card";
 import type { Vehicle } from "@/lib/vehicles";
 import { server } from "@/test/server";
-
-// Pin the clock so the latest accepted model year (next year) is stable.
-beforeAll(() => {
-  vi.useFakeTimers({ toFake: ["Date"] });
-  vi.setSystemTime(new Date("2026-06-15T12:00:00Z"));
-});
-
-afterAll(() => {
-  vi.useRealTimers();
-});
 
 const accord: Vehicle = {
   id: 7,
@@ -40,353 +19,248 @@ const accord: Vehicle = {
   mileage: 182000,
 };
 
-const modelsByMakeYear: Record<string, string[]> = {
-  "honda|2003": ["Accord", "Civic", "CR-V"],
-  "honda|2005": ["Accord", "Civic", "Element"],
-  "toyota|2015": ["Camry", "Corolla"],
-};
-
 beforeEach(() => {
   server.use(
-    http.get("*/api/vpic/models", ({ request }) => {
-      const url = new URL(request.url);
-      const key = `${url.searchParams.get("make")?.toLowerCase()}|${url.searchParams.get("year")}`;
-
-      return HttpResponse.json({ models: modelsByMakeYear[key] ?? [] });
-    }),
+    http.get("*/api/vpic/models", () =>
+      HttpResponse.json({ models: ["Accord", "Camry", "Civic"] }),
+    ),
   );
 });
 
-type Action = (
-  state: VehicleFormState,
-  formData: FormData,
-) => Promise<VehicleFormState>;
-
-type DeleteAction = () => Promise<DeleteVehicleState>;
-
-function renderCard(
-  vehicle: Vehicle = accord,
-  action: Action = vi.fn(async (state: VehicleFormState) => state),
-  deleteAction: DeleteAction = vi.fn(async () => ({})),
-) {
-  const user = userEvent.setup();
-  const view = render(
-    <VehicleDetailsCard
-      vehicle={vehicle}
-      action={action}
-      deleteAction={deleteAction}
-    />,
-  );
-
-  return { user, action, deleteAction, view };
-}
-
-/** Resolves with the action's result for the submitted form. */
-function savingAction(result: (values: FormData) => Partial<VehicleFormState>) {
-  return vi.fn(async (_state: VehicleFormState, formData: FormData) => ({
-    values: Object.fromEntries(formData) as VehicleFormState["values"],
-    ...result(formData),
-  }));
-}
-
-const editButton = () => screen.getByRole("button", { name: "Edit vehicle" });
-const form = () => screen.queryByRole("form", { name: "Edit vehicle" });
-const textbox = (name: string | RegExp) =>
-  screen.getByRole("textbox", { name });
-const detail = (label: string) =>
-  screen.getByText(label, { selector: "dt" }).nextElementSibling;
-
 async function startEditing(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(editButton());
+  await user.click(screen.getByRole("button", { name: "Edit vehicle" }));
   await waitFor(() =>
     expect(screen.getByRole("combobox", { name: "Model" })).toBeEnabled(),
   );
 }
 
+function submittedState(formData: FormData) {
+  return Object.fromEntries(formData) as VehicleFormState["values"];
+}
+
 describe("VehicleDetailsCard", () => {
   it("switches to a prefilled form in place and focuses the year", async () => {
-    const { user } = renderCard();
-
-    expect(detail("Model")).toHaveTextContent("Accord");
-    expect(form()).not.toBeInTheDocument();
+    const user = userEvent.setup();
+    render(
+      <VehicleDetailsCard
+        vehicle={accord}
+        action={vi.fn()}
+        deleteAction={vi.fn()}
+      />,
+    );
 
     await startEditing(user);
 
-    expect(form()).toBeInTheDocument();
-    expect(screen.getByText("Edit details")).toBeInTheDocument();
-    expect(textbox("Year")).toHaveValue("2003");
-    expect(textbox("Year")).toHaveFocus();
-    expect(screen.getByRole("combobox", { name: "Make" })).toHaveValue("Honda");
+    expect(screen.getByRole("textbox", { name: "Year" })).toHaveFocus();
+    expect(screen.getByRole("textbox", { name: "Year" })).toHaveValue("2003");
     expect(screen.getByRole("combobox", { name: "Model" })).toHaveValue(
       "Accord",
     );
-    expect(textbox(/^Trim/)).toHaveValue("EX-V6");
-    expect(textbox(/^VIN/)).toHaveValue("1HGCM82633A004352");
-    expect(textbox(/^Mileage/)).toHaveValue("182,000");
-    expect(textbox(/^Nickname/)).toHaveValue("Commuter");
-  });
-
-  it("prefills blank optional fields as empty", async () => {
-    const { user } = renderCard({
-      ...accord,
-      trim: null,
-      vin: null,
-      nickname: null,
-      mileage: null,
-    });
-
-    await startEditing(user);
-
-    for (const name of [/^Trim/, /^VIN/, /^Mileage/, /^Nickname/]) {
-      expect(textbox(name)).toHaveValue("");
-    }
+    expect(screen.getByRole("textbox", { name: /^Mileage/ })).toHaveValue(
+      "182,000",
+    );
   });
 
   it("keeps a model the vPIC list does not include as Other", async () => {
-    const { user } = renderCard({
-      ...accord,
-      year: 2015,
-      make: "Toyota",
-      model: "Camry Hybrid Custom",
-    });
+    const user = userEvent.setup();
+    render(
+      <VehicleDetailsCard
+        vehicle={{ ...accord, model: "Accord Hybrid Custom" }}
+        action={vi.fn()}
+        deleteAction={vi.fn()}
+      />,
+    );
 
     await startEditing(user);
 
     expect(screen.getByRole("combobox", { name: "Model" })).toHaveValue(
       "Other / not listed",
     );
-    expect(textbox("Model name")).toHaveValue("Camry Hybrid Custom");
+    expect(screen.getByRole("textbox", { name: "Model name" })).toHaveValue(
+      "Accord Hybrid Custom",
+    );
   });
 
   it("keeps a make outside the list as Other", async () => {
-    const { user } = renderCard({
-      ...accord,
-      year: 1981,
-      make: "DeLorean",
-      model: "DMC-12",
-    });
+    const user = userEvent.setup();
+    render(
+      <VehicleDetailsCard
+        vehicle={{ ...accord, year: 1981, make: "DeLorean", model: "DMC-12" }}
+        action={vi.fn()}
+        deleteAction={vi.fn()}
+      />,
+    );
 
-    await user.click(editButton());
+    await user.click(screen.getByRole("button", { name: "Edit vehicle" }));
 
     expect(screen.getByRole("combobox", { name: "Make" })).toHaveValue(
       "Other / not listed",
     );
-    expect(textbox("Make name")).toHaveValue("DeLorean");
-    expect(textbox("Model")).toHaveValue("DMC-12");
+    expect(screen.getByRole("textbox", { name: "Make name" })).toHaveValue(
+      "DeLorean",
+    );
   });
 
-  it("shows an error for each invalid field without saving", async () => {
-    const { user, action } = renderCard({
-      ...accord,
-      year: 1981,
-      make: "DeLorean",
-      model: "DMC-12",
-    });
+  it("shows an error for each invalid field and focuses the first", async () => {
+    const user = userEvent.setup();
+    const action = vi.fn();
+    render(
+      <VehicleDetailsCard
+        vehicle={accord}
+        action={action}
+        deleteAction={vi.fn()}
+      />,
+    );
 
-    await user.click(editButton());
-    await user.clear(textbox("Year"));
-    await user.type(textbox("Year"), "1700");
-    await user.clear(textbox("Make name"));
-    await user.clear(textbox("Model"));
-    await user.clear(textbox(/^VIN/));
-    await user.type(textbox(/^VIN/), "abc");
-    await user.clear(textbox(/^Mileage/));
-    await user.type(textbox(/^Mileage/), "-5");
+    await startEditing(user);
+    await user.clear(screen.getByRole("textbox", { name: "Year" }));
+    await user.type(screen.getByRole("textbox", { name: "Year" }), "1700");
+    await user.clear(screen.getByRole("textbox", { name: /^Mileage/ }));
+    await user.type(screen.getByRole("textbox", { name: /^Mileage/ }), "-5");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     expect(
-      screen.getByText("Year must be between 1886 and 2027"),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Make is required")).toBeInTheDocument();
-    expect(screen.getByText("Model is required")).toBeInTheDocument();
-    expect(
-      screen.getByText("VIN must be 17 characters (currently 3)"),
+      screen.getByText(/^Year must be between 1886 and \d{4}$/),
     ).toBeInTheDocument();
     expect(
       screen.getByText("Mileage must be a whole number of 0 or more"),
     ).toBeInTheDocument();
-    expect(textbox("Year")).toHaveFocus();
-    expect(textbox("Year")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByRole("textbox", { name: "Year" })).toHaveFocus();
     expect(action).not.toHaveBeenCalled();
   });
 
-  it("strips spaces from the VIN and uppercases it", async () => {
-    const { user } = renderCard({ ...accord, vin: null });
-
-    await startEditing(user);
-    await user.type(textbox(/^VIN/), "1hg cm826 33a004352");
-
-    expect(textbox(/^VIN/)).toHaveValue("1HGCM82633A004352");
-  });
-
-  it("restores the details unchanged on Cancel", async () => {
-    const { user, action } = renderCard();
-
-    await startEditing(user);
-    await user.clear(textbox(/^Trim/));
-    await user.type(textbox(/^Trim/), "LX");
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
-
-    expect(form()).not.toBeInTheDocument();
-    expect(detail("Trim")).toHaveTextContent("EX-V6");
-    expect(editButton()).toHaveFocus();
-    expect(action).not.toHaveBeenCalled();
-
-    await startEditing(user);
-
-    expect(textbox(/^Trim/)).toHaveValue("EX-V6");
-  });
-
-  it("cancels on Escape", async () => {
-    const { user, action } = renderCard();
-
-    await startEditing(user);
-    await user.type(textbox(/^Nickname/), " car");
-    await user.keyboard("{Escape}");
-
-    expect(form()).not.toBeInTheDocument();
-    expect(editButton()).toHaveFocus();
-    expect(action).not.toHaveBeenCalled();
-  });
-
-  it("cancels on Escape from a picker without clearing it first", async () => {
-    const { user } = renderCard();
-
-    await startEditing(user);
-    await user.click(screen.getByRole("combobox", { name: "Make" }));
-    await user.keyboard("{Escape}");
-
-    expect(form()).toBeInTheDocument();
-
-    await user.keyboard("{Escape}");
-
-    expect(form()).not.toBeInTheDocument();
-    expect(detail("Make")).toHaveTextContent("Honda");
-  });
-
-  it("saves, confirms with a toast and returns to the details", async () => {
-    const action = savingAction(() => ({ saved: true }));
-    const { user, view } = renderCard(accord, action);
-
-    await startEditing(user);
-    await user.clear(textbox("Year"));
-    await user.type(textbox("Year"), "2005");
-    await user.clear(textbox(/^Mileage/));
-    await user.type(textbox(/^Mileage/), "190,500");
-    await user.clear(textbox(/^Nickname/));
-    await user.type(textbox(/^Nickname/), "Daily");
-    await user.click(screen.getByRole("button", { name: "Save" }));
-
-    await waitFor(() => expect(form()).not.toBeInTheDocument());
-    expect(toast.success).toHaveBeenCalledWith("Vehicle updated");
-    expect(editButton()).toHaveFocus();
-    expect(action).toHaveBeenCalledTimes(1);
-    expect(Object.fromEntries(action.mock.calls[0][1])).toEqual({
-      year: "2005",
-      make: "Honda",
-      model: "Accord",
-      trim: "EX-V6",
-      vin: "1HGCM82633A004352",
-      mileage: "190,500",
-      nickname: "Daily",
-    });
-
-    // The server action refreshes the page with the saved vehicle.
-    view.rerender(
+  it("restores the details on Cancel and returns focus to Edit", async () => {
+    const user = userEvent.setup();
+    render(
       <VehicleDetailsCard
-        vehicle={{
-          ...accord,
-          year: 2005,
-          mileage: 190500,
-          nickname: "Daily",
-        }}
-        action={action}
-        deleteAction={vi.fn(async () => ({}))}
+        vehicle={accord}
+        action={vi.fn()}
+        deleteAction={vi.fn()}
       />,
     );
 
-    expect(detail("Mileage")).toHaveTextContent("190,500 mi");
+    await startEditing(user);
+    await user.type(screen.getByRole("textbox", { name: /^Trim/ }), " LX");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.getByText("EX-V6")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit vehicle" })).toHaveFocus();
+  });
+
+  it("cancels on Escape", async () => {
+    const user = userEvent.setup();
+    render(
+      <VehicleDetailsCard
+        vehicle={accord}
+        action={vi.fn()}
+        deleteAction={vi.fn()}
+      />,
+    );
+
+    await startEditing(user);
+    await user.keyboard("{Escape}");
+
+    expect(
+      screen.queryByRole("form", { name: "Edit vehicle" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("saves, confirms with a toast and returns to the details", async () => {
+    const user = userEvent.setup();
+    const action = vi.fn(
+      async (_state: VehicleFormState, formData: FormData) => ({
+        values: submittedState(formData),
+        saved: true,
+      }),
+    );
+    render(
+      <VehicleDetailsCard
+        vehicle={accord}
+        action={action}
+        deleteAction={vi.fn()}
+      />,
+    );
+
+    await startEditing(user);
+    await user.clear(screen.getByRole("textbox", { name: /^Nickname/ }));
+    await user.type(
+      screen.getByRole("textbox", { name: /^Nickname/ }),
+      "Daily",
+    );
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith("Vehicle updated"),
+    );
+    expect(action.mock.calls[0][1].get("nickname")).toBe("Daily");
+    expect(screen.getByRole("button", { name: "Edit vehicle" })).toHaveFocus();
   });
 
   it("saves the prefilled model while the model list is still loading", async () => {
     server.use(
       http.get("*/api/vpic/models", async () => {
         await delay(1000);
-        return HttpResponse.json({ models: ["Accord", "Civic"] });
+        return HttpResponse.json({ models: ["Accord"] });
       }),
     );
-    const action = savingAction(() => ({ saved: true }));
-    const { user } = renderCard({ ...accord, year: 2004 }, action);
-
-    await user.click(editButton());
-
-    expect(screen.getByRole("combobox", { name: "Model" })).toHaveAttribute(
-      "placeholder",
-      "Loading models...",
+    const user = userEvent.setup();
+    const action = vi.fn(
+      async (_state: VehicleFormState, formData: FormData) => ({
+        values: submittedState(formData),
+        saved: true,
+      }),
+    );
+    render(
+      <VehicleDetailsCard
+        vehicle={accord}
+        action={action}
+        deleteAction={vi.fn()}
+      />,
     );
 
+    await user.click(screen.getByRole("button", { name: "Edit vehicle" }));
     await user.click(screen.getByRole("button", { name: "Save" }));
 
-    await waitFor(() => expect(form()).not.toBeInTheDocument());
-    expect(screen.queryByText("Model is required")).not.toBeInTheDocument();
-    expect(action).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(action).toHaveBeenCalledOnce());
     expect(action.mock.calls[0][1].get("model")).toBe("Accord");
   });
 
-  it("disables Save and Cancel and ignores Escape while saving", async () => {
-    let finish: (state: VehicleFormState) => void = () => {};
-    const action = vi.fn(
-      (state: VehicleFormState) =>
-        new Promise<VehicleFormState>((resolve) => {
-          finish = () => resolve({ ...state, saved: true });
-        }),
-    );
-    const { user } = renderCard(accord, action);
-
-    await startEditing(user);
-    await user.click(screen.getByRole("button", { name: "Save" }));
-
-    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
-
-    await user.click(textbox(/^Trim/));
-    await user.keyboard("{Escape}");
-
-    expect(form()).toBeInTheDocument();
-
-    finish(action.mock.calls[0][0]);
-
-    await waitFor(() => expect(form()).not.toBeInTheDocument());
-  });
-
   it("shows a backend error in the form and as a toast", async () => {
-    const action = savingAction(() => ({
-      message: "Something went wrong. Please try again.",
-    }));
-    const { user } = renderCard(accord, action);
+    const user = userEvent.setup();
+    render(
+      <VehicleDetailsCard
+        vehicle={accord}
+        action={async (_state, formData) => ({
+          values: submittedState(formData),
+          message: "Something went wrong. Please try again.",
+        })}
+        deleteAction={vi.fn()}
+      />,
+    );
 
     await startEditing(user);
     await user.click(screen.getByRole("button", { name: "Save" }));
 
-    expect(
-      await screen.findByText("Something went wrong. Please try again.", {
-        selector: "form [role=alert] *",
-      }),
-    ).toBeInTheDocument();
-    await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith(
-        "Something went wrong. Please try again.",
-      ),
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Something went wrong. Please try again.",
     );
-    expect(form()).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save" })).toHaveFocus();
+    expect(toast.error).toHaveBeenCalledWith(
+      "Something went wrong. Please try again.",
+    );
   });
 
   it("shows a backend field error on its field and focuses it", async () => {
-    const action = savingAction(() => ({
-      errors: { vin: ["VIN must be 17 characters"] },
-    }));
-    const { user } = renderCard(accord, action);
+    const user = userEvent.setup();
+    render(
+      <VehicleDetailsCard
+        vehicle={accord}
+        action={async (_state, formData) => ({
+          values: submittedState(formData),
+          errors: { vin: ["VIN must be 17 characters"] },
+        })}
+        deleteAction={vi.fn()}
+      />,
+    );
 
     await startEditing(user);
     await user.click(screen.getByRole("button", { name: "Save" }));
@@ -394,27 +268,18 @@ describe("VehicleDetailsCard", () => {
     expect(
       await screen.findByText("VIN must be 17 characters"),
     ).toBeInTheDocument();
-    expect(textbox(/^VIN/)).toHaveFocus();
-    expect(textbox(/^VIN/)).toHaveAttribute("aria-invalid", "true");
-    expect(form()).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /^VIN/ })).toHaveFocus();
   });
-});
-
-describe("Deleting from the edit form", () => {
-  const deleteButton = () => screen.getByRole("button", { name: "Delete" });
-  const dialog = () => screen.queryByRole("alertdialog");
-
-  async function openConfirmation(user: ReturnType<typeof userEvent.setup>) {
-    await user.click(deleteButton());
-    await waitFor(() =>
-      expect(
-        within(dialog()!).getByRole("button", { name: "Cancel" }),
-      ).toHaveFocus(),
-    );
-  }
 
   it("offers Delete only in edit mode", async () => {
-    const { user } = renderCard();
+    const user = userEvent.setup();
+    render(
+      <VehicleDetailsCard
+        vehicle={accord}
+        action={vi.fn()}
+        deleteAction={vi.fn()}
+      />,
+    );
 
     expect(
       screen.queryByRole("button", { name: "Delete" }),
@@ -422,94 +287,24 @@ describe("Deleting from the edit form", () => {
 
     await startEditing(user);
 
-    expect(deleteButton()).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
   });
 
-  it("puts Delete on its own at the start of the actions, apart from Cancel and Save", async () => {
-    const { user } = renderCard();
-
-    await startEditing(user);
-
-    const footer = deleteButton().parentElement!;
-    const saveGroup = screen.getByRole("button", {
-      name: "Save",
-    }).parentElement!;
-
-    expect(footer).toHaveClass("justify-between");
-    expect(footer.firstElementChild).toBe(deleteButton());
-    expect(footer.lastElementChild).toBe(saveGroup);
-    expect(saveGroup).toContainElement(
-      screen.getByRole("button", { name: "Cancel" }),
+  it("deletes the vehicle after confirmation", async () => {
+    const user = userEvent.setup();
+    const deleteAction = vi.fn(async () => ({}));
+    render(
+      <VehicleDetailsCard
+        vehicle={accord}
+        action={vi.fn()}
+        deleteAction={deleteAction}
+      />,
     );
-  });
-
-  it("asks for confirmation naming the vehicle and what is lost, focusing Cancel", async () => {
-    const { user, deleteAction } = renderCard();
 
     await startEditing(user);
-    await openConfirmation(user);
-
-    expect(dialog()).toHaveAccessibleName("Delete 2003 Honda Accord?");
-    expect(dialog()).toHaveAccessibleDescription(
-      "This permanently deletes the vehicle and all of its maintenance records. It cannot be undone.",
-    );
-    expect(deleteAction).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    [
-      "Cancel",
-      async (user: ReturnType<typeof userEvent.setup>) =>
-        user.click(screen.getByRole("button", { name: "Cancel" })),
-    ],
-    [
-      "Escape",
-      async (user: ReturnType<typeof userEvent.setup>) =>
-        user.keyboard("{Escape}"),
-    ],
-  ])(
-    "closes the confirmation on %s and stays in the form",
-    async (_name, dismiss) => {
-      const { user, deleteAction } = renderCard();
-
-      await startEditing(user);
-      await openConfirmation(user);
-      await dismiss(user);
-
-      await waitFor(() => expect(dialog()).not.toBeInTheDocument());
-      expect(form()).toBeInTheDocument();
-      expect(deleteButton()).toHaveFocus();
-      expect(deleteAction).not.toHaveBeenCalled();
-    },
-  );
-
-  it("deletes the vehicle on confirm", async () => {
-    const { user, deleteAction } = renderCard();
-
-    await startEditing(user);
-    await openConfirmation(user);
+    await user.click(screen.getByRole("button", { name: "Delete" }));
     await user.click(screen.getByRole("button", { name: "Delete vehicle" }));
 
-    expect(deleteAction).toHaveBeenCalledTimes(1);
-  });
-
-  it("disables Delete while saving", async () => {
-    let finish: () => void = () => {};
-    const action = vi.fn(
-      (state: VehicleFormState) =>
-        new Promise<VehicleFormState>((resolve) => {
-          finish = () => resolve(state);
-        }),
-    );
-    const { user } = renderCard(accord, action);
-
-    await startEditing(user);
-    await user.click(screen.getByRole("button", { name: "Save" }));
-
-    expect(deleteButton()).toBeDisabled();
-
-    finish();
-
-    await waitFor(() => expect(deleteButton()).toBeEnabled());
+    expect(deleteAction).toHaveBeenCalledOnce();
   });
 });

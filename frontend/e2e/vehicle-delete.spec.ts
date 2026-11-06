@@ -23,19 +23,27 @@ const accord = {
 
 const camry = { year: 2015, make: "Toyota", model: "Camry" };
 
+const oilChange = {
+  type: "oil_change",
+  description: "Oil and filter",
+  performed_at: "2026-01-15",
+};
+
 test("deletes a vehicle with its maintenance records after confirmation", async ({
   page,
 }) => {
   const id = await insertVehicle(accord);
   await insertVehicle(camry);
-  await insertMaintenanceRecord(id);
+  await insertMaintenanceRecord(id, oilChange);
 
   await page.goto(`/vehicles/${id}`);
 
-  await expect(page.getByRole("button", { name: "Delete" })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Delete", exact: true }),
+  ).toHaveCount(0);
 
   await page.getByRole("button", { name: "Edit vehicle" }).click();
-  await page.getByRole("button", { name: "Delete" }).click();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
 
   const dialog = page.getByRole("alertdialog", {
     name: "Delete 2003 Honda Accord?",
@@ -50,7 +58,7 @@ test("deletes a vehicle with its maintenance records after confirmation", async 
   await expect(page.getByRole("form", { name: "Edit vehicle" })).toBeVisible();
   expect(await findVehicle(id)).toBeDefined();
 
-  await page.getByRole("button", { name: "Delete" }).click();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
   await dialog.getByRole("button", { name: "Delete vehicle" }).click();
 
   await expect(page).toHaveURL("/vehicles");
@@ -76,7 +84,7 @@ test("cannot delete another user's vehicle with a crafted request", async ({
     model: "Impala",
     nickname: "Someone else's car",
   });
-  await insertMaintenanceRecord(otherId);
+  await insertMaintenanceRecord(otherId, oilChange);
   let craftedRequests = 0;
 
   await page.route(`**/vehicles/${ownId}`, async (route) => {
@@ -97,7 +105,7 @@ test("cannot delete another user's vehicle with a crafted request", async ({
 
   await page.goto(`/vehicles/${ownId}`);
   await page.getByRole("button", { name: "Edit vehicle" }).click();
-  await page.getByRole("button", { name: "Delete" }).click();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
   await page.getByRole("button", { name: "Delete vehicle" }).click();
 
   await expect(page.getByText("Vehicle not found")).toBeVisible();

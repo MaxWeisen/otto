@@ -17,7 +17,8 @@ import (
 const MaxBodyBytes = 1 << 20
 
 type errorResponse struct {
-	Error string `json:"error"`
+	Error  string            `json:"error"`
+	Errors map[string]string `json:"errors,omitempty"`
 }
 
 // WriteJSON writes v as a JSON response with the given status code.
@@ -30,6 +31,15 @@ func WriteJSON(w http.ResponseWriter, status int, v any) {
 // WriteError writes msg as a JSON error response of the form {"error": msg}.
 func WriteError(w http.ResponseWriter, status int, msg string) {
 	WriteJSON(w, status, errorResponse{Error: msg})
+}
+
+// WriteFieldErrors writes a 400 response that maps each invalid request
+// field to the message to show for it.
+func WriteFieldErrors(w http.ResponseWriter, errors map[string]string) {
+	WriteJSON(w, http.StatusBadRequest, errorResponse{
+		Error:  "Check the highlighted fields.",
+		Errors: errors,
+	})
 }
 
 // DecodeJSON decodes a single JSON object from the request body into dst.

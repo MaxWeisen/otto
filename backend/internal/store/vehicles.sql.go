@@ -135,6 +135,23 @@ func (q *Queries) ListVehiclesByUser(ctx context.Context, userID int64) ([]Vehic
 	return items, nil
 }
 
+const raiseVehicleMileage = `-- name: RaiseVehicleMileage :exec
+UPDATE vehicles
+SET mileage = GREATEST(COALESCE(mileage, 0), $1::int)
+WHERE id = $2 AND user_id = $3
+`
+
+type RaiseVehicleMileageParams struct {
+	Mileage int32 `json:"mileage"`
+	ID      int64 `json:"id"`
+	UserID  int64 `json:"user_id"`
+}
+
+func (q *Queries) RaiseVehicleMileage(ctx context.Context, arg RaiseVehicleMileageParams) error {
+	_, err := q.db.Exec(ctx, raiseVehicleMileage, arg.Mileage, arg.ID, arg.UserID)
+	return err
+}
+
 const updateVehicle = `-- name: UpdateVehicle :one
 UPDATE vehicles
 SET year = $1, make = $2, model = $3, trim = $4, vin = $5, nickname = $6, mileage = $7
