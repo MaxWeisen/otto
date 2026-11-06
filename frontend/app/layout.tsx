@@ -7,8 +7,9 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 // toaster
 import { Toaster } from "@/components/ui/sonner";
-// theme provider
+// theme
 import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
@@ -56,6 +57,7 @@ export default function RootLayout({
         >
           <Toaster />
           {children}
+          <ThemeToggle />
         </ThemeProvider>
       </body>
     </html>
