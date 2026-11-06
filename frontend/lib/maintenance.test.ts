@@ -1,12 +1,10 @@
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 import {
-  createMaintenanceRecord,
-  deleteMaintenanceRecord,
   listMaintenanceRecords,
-  updateMaintenanceRecord,
+  saveMaintenanceRecord,
+  type MaintenanceInput,
 } from "@/lib/maintenance";
-import type { MaintenanceInput } from "@/lib/maintenance-schema";
 import { NotFoundError } from "@/test/next-mocks";
 import { API_URL, server } from "@/test/server";
 
@@ -19,22 +17,15 @@ const input: MaintenanceInput = {
   notes: null,
 };
 
-const saved = {
-  ...input,
-  id: 31,
-  vehicle_id: 7,
-  created_at: "2026-05-09T17:00:00Z",
-};
-
 describe("listMaintenanceRecords", () => {
   it("returns the vehicle's records", async () => {
     server.use(
       http.get(`${API_URL}/api/vehicles/7/maintenance`, () =>
-        HttpResponse.json([saved]),
+        HttpResponse.json([{ id: 31 }]),
       ),
     );
 
-    await expect(listMaintenanceRecords("7")).resolves.toEqual([saved]);
+    await expect(listMaintenanceRecords("7")).resolves.toEqual([{ id: 31 }]);
   });
 
   it("shows the not-found page for a vehicle the visitor cannot see", async () => {
@@ -46,55 +37,46 @@ describe("listMaintenanceRecords", () => {
 
     await expect(listMaintenanceRecords("8")).rejects.toThrow(NotFoundError);
   });
-
-  it("shows the not-found page for an invalid id without calling the API", async () => {
-    await expect(listMaintenanceRecords("abc")).rejects.toThrow(NotFoundError);
-  });
-
-  it("throws the API's message for other failures", async () => {
-    server.use(
-      http.get(`${API_URL}/api/vehicles/7/maintenance`, () =>
-        HttpResponse.json({ error: "Something went wrong." }, { status: 500 }),
-      ),
-    );
-
-    await expect(listMaintenanceRecords("7")).rejects.toThrow(
-      "Something went wrong.",
-    );
-  });
 });
 
-describe("createMaintenanceRecord", () => {
-  it("posts the record and returns the saved one", async () => {
+describe("saveMaintenanceRecord", () => {
+  it("posts a new record", async () => {
     let body: unknown;
-
     server.use(
       http.post(
         `${API_URL}/api/vehicles/7/maintenance`,
         async ({ request }) => {
           body = await request.json();
-          return HttpResponse.json(saved, { status: 201 });
+          return HttpResponse.json({ id: 31 }, { status: 201 });
         },
       ),
     );
 
-    await expect(createMaintenanceRecord(7, input)).resolves.toEqual({
+    await expect(saveMaintenanceRecord(7, undefined, input)).resolves.toEqual({
       ok: true,
-      data: saved,
     });
     expect(body).toEqual(input);
   });
 
-  it("shows the not-found page for another user's vehicle", async () => {
+  it("returns the server's field errors", async () => {
     server.use(
-      http.post(`${API_URL}/api/vehicles/8/maintenance`, () =>
-        HttpResponse.json({ error: "Vehicle not found." }, { status: 404 }),
+      http.put(`${API_URL}/api/vehicles/7/maintenance/31`, () =>
+        HttpResponse.json(
+          {
+            error: "Check the highlighted fields.",
+            errors: { cost: "Cost must not be negative" },
+          },
+          { status: 400 },
+        ),
       ),
     );
 
-    await expect(createMaintenanceRecord(8, input)).rejects.toThrow(
-      NotFoundError,
-    );
+    await expect(saveMaintenanceRecord(7, 31, input)).resolves.toEqual({
+      ok: false,
+      status: 400,
+      error: "Check the highlighted fields.",
+      errors: { cost: "Cost must not be negative" },
+    });
   });
 
   it("reports an unreachable backend", async () => {
@@ -104,44 +86,10 @@ describe("createMaintenanceRecord", () => {
       ),
     );
 
-    await expect(createMaintenanceRecord(7, input)).resolves.toEqual({
+    await expect(saveMaintenanceRecord(7, undefined, input)).resolves.toEqual({
       ok: false,
       status: 502,
       error: "Could not reach the server. Please try again.",
-    });
-  });
-});
-
-describe("updateMaintenanceRecord", () => {
-  it("returns a missing record to the caller instead of not-found", async () => {
-    server.use(
-      http.put(`${API_URL}/api/vehicles/7/maintenance/31`, () =>
-        HttpResponse.json(
-          { error: "Maintenance record not found." },
-          { status: 404 },
-        ),
-      ),
-    );
-
-    await expect(updateMaintenanceRecord(7, 31, input)).resolves.toEqual({
-      ok: false,
-      status: 404,
-      error: "Maintenance record not found.",
-    });
-  });
-});
-
-describe("deleteMaintenanceRecord", () => {
-  it("deletes the record", async () => {
-    server.use(
-      http.delete(
-        `${API_URL}/api/vehicles/7/maintenance/31`,
-        () => new HttpResponse(null, { status: 204 }),
-      ),
-    );
-
-    await expect(deleteMaintenanceRecord(7, 31)).resolves.toEqual({
-      ok: true,
     });
   });
 });

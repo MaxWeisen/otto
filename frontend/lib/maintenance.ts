@@ -1,17 +1,7 @@
 import "server-only";
 import { notFound, unstable_rethrow } from "next/navigation";
 import { apiFetch, readApiError } from "@/lib/api";
-import type {
-  MaintenanceInput,
-  MaintenanceType,
-} from "@/lib/maintenance-schema";
-import {
-  UNREACHABLE_FAILURE,
-  assertPositiveId,
-  isVehicleId,
-  type MutationFailure,
-  type MutationResult,
-} from "@/lib/vehicles";
+import type { MaintenanceType } from "@/lib/maintenance-format";
 
 export type MaintenanceRecord = {
   id: number;
@@ -25,11 +15,29 @@ export type MaintenanceRecord = {
   created_at: string;
 };
 
-function recordsPath(vehicleId: number, recordId?: number): string {
-  assertPositiveId(vehicleId);
+export type MaintenanceInput = {
+  type: string;
+  description: string;
+  performed_at: string;
+  mileage: number | string | null;
+  cost: string | null;
+  notes: string | null;
+};
 
-  if (recordId !== undefined) {
-    assertPositiveId(recordId);
+export type MaintenanceResult =
+  | { ok: true }
+  | {
+      ok: false;
+      status: number;
+      error: string;
+      errors?: Record<string, string>;
+    };
+
+function recordsPath(vehicleId: number, recordId?: number): string {
+  const ids = recordId === undefined ? [vehicleId] : [vehicleId, recordId];
+
+  if (!ids.every((id) => Number.isSafeInteger(id) && id > 0)) {
+    notFound();
   }
 
   const base = `/api/vehicles/${vehicleId}/maintenance`;
@@ -40,7 +48,7 @@ function recordsPath(vehicleId: number, recordId?: number): string {
 export async function listMaintenanceRecords(
   vehicleId: string,
 ): Promise<MaintenanceRecord[]> {
-  if (!isVehicleId(vehicleId)) {
+  if (!/^[1-9]\d*$/.test(vehicleId)) {
     notFound();
   }
 
@@ -57,85 +65,61 @@ export async function listMaintenanceRecords(
   return response.json();
 }
 
-export async function createMaintenanceRecord(
+export function saveMaintenanceRecord(
   vehicleId: number,
+  recordId: number | undefined,
   input: MaintenanceInput,
-): Promise<MutationResult<MaintenanceRecord>> {
-  const result = await send(recordsPath(vehicleId), "POST", input);
-
-  if (!result.ok && result.status === 404) {
-    notFound();
-  }
-
-  return result;
-}
-
-export async function updateMaintenanceRecord(
-  vehicleId: number,
-  recordId: number,
-  input: MaintenanceInput,
-): Promise<MutationResult<MaintenanceRecord>> {
-  return send(recordsPath(vehicleId, recordId), "PUT", input);
-}
-
-export async function deleteMaintenanceRecord(
-  vehicleId: number,
-  recordId: number,
-): Promise<{ ok: true } | MutationFailure> {
-  const response = await request(recordsPath(vehicleId, recordId), {
-    method: "DELETE",
+): Promise<MaintenanceResult> {
+  return send(recordsPath(vehicleId, recordId), {
+    method: recordId === undefined ? "POST" : "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
   });
+}
 
-  if (!(response instanceof Response)) {
-    return response;
-  }
-
-  if (response.status !== 204) {
-    return {
-      ok: false,
-      status: response.status,
-      error: await readApiError(response),
-    };
-  }
-
-  return { ok: true };
+export function deleteMaintenanceRecord(
+  vehicleId: number,
+  recordId: number,
+): Promise<MaintenanceResult> {
+  return send(recordsPath(vehicleId, recordId), { method: "DELETE" });
 }
 
 async function send(
   path: string,
-  method: "POST" | "PUT",
-  input: MaintenanceInput,
-): Promise<MutationResult<MaintenanceRecord>> {
-  const response = await request(path, {
-    method,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
-
-  if (!(response instanceof Response)) {
-    return response;
-  }
-
-  if (!response.ok) {
-    return {
-      ok: false,
-      status: response.status,
-      error: await readApiError(response),
-    };
-  }
-
-  return { ok: true, data: await response.json() };
-}
-
-async function request(
-  path: string,
   init: RequestInit,
-): Promise<Response | MutationFailure> {
+): Promise<MaintenanceResult> {
+  let response: Response;
+
   try {
-    return await apiFetch(path, init);
+    response = await apiFetch(path, init);
   } catch (error) {
     unstable_rethrow(error);
 
-    return UNREACHABLE_FAILURE;
+    return {
+      ok: false,
+      status: 502,
+      error: "Could not reach the server. Please try again.",
+    };
   }
+
+  if (response.ok) {
+    return { ok: true };
+  }
+
+  const errors =
+    response.status === 400
+      ? (
+          await response
+            .clone()
+            .json()
+            .catch(() => null)
+        )?.errors
+      : undefined;
+
+  return {
+    ok: false,
+    status: response.status,
+    error: await readApiError(response),
+    errors,
+  };
 }

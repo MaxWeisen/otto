@@ -1,4 +1,3 @@
-import { getYear } from "date-fns";
 import { z } from "zod";
 
 // These rules mirror the backend's validation in backend/internal/validate
@@ -10,7 +9,7 @@ const VIN_PATTERN = /^[A-HJ-NPR-Z0-9]+$/;
 const MAX_MILEAGE = 2_147_483_647;
 
 export function maxVehicleYear(): number {
-  return getYear(new Date()) + 1;
+  return new Date().getFullYear() + 1;
 }
 
 export const VEHICLE_FIELDS = [
@@ -83,7 +82,7 @@ const year = z
       `Year must be between ${MIN_VEHICLE_YEAR} and ${maxVehicleYear()}`,
   });
 
-export const mileageSchema = z
+const mileage = z
   .string()
   .transform((value) => value.replace(/[\s,_]/g, ""))
   .refine((value) => value === "" || /^\d+$/.test(value), {
@@ -124,7 +123,7 @@ export const vehicleFormSchema = z.object({
   model: requiredText("Model"),
   trim: optionalText("Trim"),
   nickname: optionalText("Nickname"),
-  mileage: mileageSchema,
+  mileage,
   vin,
 });
 

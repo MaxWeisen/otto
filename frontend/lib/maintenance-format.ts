@@ -1,10 +1,16 @@
 import { format, getYear, parseISO } from "date-fns";
-import {
-  MAINTENANCE_TYPE_LABELS,
-  mileageFormatter,
-  type MaintenanceType,
-} from "@/lib/maintenance-schema";
+export const MAINTENANCE_TYPE_LABELS = {
+  oil_change: "Oil change",
+  tire_rotation: "Tire rotation",
+  brakes: "Brakes",
+  inspection: "Inspection",
+  repair: "Repair",
+  other: "Other",
+};
 
+export type MaintenanceType = keyof typeof MAINTENANCE_TYPE_LABELS;
+
+export const mileageFormatter = new Intl.NumberFormat("en-US");
 const costFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",

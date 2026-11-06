@@ -35,14 +35,14 @@ const brakes: MaintenanceRecord = {
   type: "brakes",
   description: "Front pads and rotors",
   performed_at: "2026-01-18",
-  mileage: null,
-  cost: null,
-  notes: null,
+  mileage: 176300,
+  cost: "1234.5",
+  notes: "Akebono ceramic pads.",
   created_at: "2026-01-18T17:00:00Z",
 };
 
 describe("MaintenanceSection", () => {
-  it("opens the add dialog from the empty state with the vehicle's mileage", async () => {
+  it("opens the add form from the empty state with the vehicle's mileage", async () => {
     const user = userEvent.setup();
     render(
       <MaintenanceSection
@@ -51,20 +51,53 @@ describe("MaintenanceSection", () => {
       />,
     );
 
-    expect(screen.getByText("No maintenance logged yet")).toBeInTheDocument();
     await user.click(
       screen.getByRole("button", { name: "Add your first record" }),
     );
 
-    const dialog = screen.getByRole("dialog", {
-      name: "Add maintenance record",
-    });
-    expect(
-      within(dialog).getByRole("textbox", { name: /^Mileage/ }),
-    ).toHaveValue("182,000");
+    expect(screen.getByRole("textbox", { name: /^Mileage/ })).toHaveValue(
+      "182,000",
+    );
   });
 
-  it("shows a new record as saving, then removes it when saving fails", async () => {
+  it("lists records under their year with mileage and cost", () => {
+    const inspection = {
+      ...brakes,
+      id: 30,
+      performed_at: "2025-03-14",
+      description: "State inspection",
+    };
+    render(
+      <MaintenanceSection
+        vehicle={accord}
+        records={[brakes, inspection]}
+      />,
+    );
+
+    const year2026 = screen.getByRole("region", { name: "2026" });
+    expect(year2026).toHaveTextContent("Front pads and rotors");
+    expect(year2026).toHaveTextContent("176,300 mi");
+    expect(year2026).toHaveTextContent("$1,234.50");
+    expect(screen.getByRole("region", { name: "2025" })).toHaveTextContent(
+      "State inspection",
+    );
+  });
+
+  it("shows notes behind More", async () => {
+    const user = userEvent.setup();
+    render(
+      <MaintenanceSection
+        vehicle={accord}
+        records={[brakes]}
+      />,
+    );
+
+    expect(screen.getByText("Akebono ceramic pads.")).not.toBeVisible();
+    await user.click(screen.getByRole("button", { name: "More" }));
+    expect(screen.getByText("Akebono ceramic pads.")).toBeVisible();
+  });
+
+  it("shows a new record as saving, then removes it when the server rejects it", async () => {
     const user = userEvent.setup();
     const saving = Promise.withResolvers<MaintenanceFormState>();
     vi.mocked(createMaintenanceRecordAction).mockReturnValue(saving.promise);
@@ -78,38 +111,22 @@ describe("MaintenanceSection", () => {
     await user.click(
       screen.getByRole("button", { name: "Add your first record" }),
     );
-    await user.click(screen.getByRole("combobox", { name: "Type" }));
-    await user.click(await screen.findByRole("option", { name: "Oil change" }));
     await user.type(
-      screen.getByRole("textbox", { name: /^Description/ }),
+      screen.getByRole("textbox", { name: "Description" }),
       "Synthetic 5W-30",
     );
     await user.click(screen.getByRole("button", { name: "Add record" }));
 
-    const entry = (await screen.findByText("Synthetic 5W-30")).closest("li");
+    const entry = await screen.findByRole("listitem", { hidden: true });
+    expect(entry).toHaveTextContent("Synthetic 5W-30");
     expect(entry).toHaveTextContent("Saving...");
 
-    saving.resolve({
-      values: {
-        type: "oil_change",
-        performed_at: "2026-01-20",
-        description: "Synthetic 5W-30",
-        mileage: "",
-        cost: "",
-        notes: "",
-      },
-      message: "Could not reach the server. Please try again.",
-    });
+    saving.resolve({ errors: { type: "Type is required" } });
 
-    await waitFor(() =>
-      expect(screen.queryByText("Synthetic 5W-30")).not.toBeInTheDocument(),
-    );
-    expect(toast.error).toHaveBeenCalledWith(
-      "Could not add the record",
-      expect.objectContaining({
-        description: "Could not reach the server. Please try again.",
-      }),
-    );
+    expect(await screen.findByText("Type is required")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("listitem", { hidden: true }),
+    ).not.toBeInTheDocument();
   });
 
   it("hides a deleted record, then restores it when deleting fails", async () => {
@@ -132,8 +149,9 @@ describe("MaintenanceSection", () => {
       }),
     );
 
-    expect(screen.queryByText("Front pads and rotors")).not.toBeInTheDocument();
-    expect(screen.getByText("No maintenance logged yet")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByText("No maintenance logged yet")).toBeInTheDocument(),
+    );
 
     deleting.resolve({ ok: false, error: "Something went wrong." });
 
