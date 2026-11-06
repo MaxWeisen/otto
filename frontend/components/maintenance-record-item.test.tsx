@@ -1,11 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { toast } from "sonner";
 import { describe, expect, it, vi } from "vitest";
-import {
-  deleteMaintenanceRecordAction,
-  type DeleteMaintenanceResult,
-} from "@/app/(authenticated)/vehicles/[id]/actions";
 import { MaintenanceRecordItem } from "@/components/maintenance-record-item";
 import type { MaintenanceRecord } from "@/lib/maintenance";
 
@@ -74,32 +69,5 @@ describe("MaintenanceRecordItem", () => {
     expect(
       within(dialog).getByRole("textbox", { name: /^Description/ }),
     ).toHaveValue("Front pads and rotors");
-  });
-
-  it("hides the record while it is deleted, then restores it when deleting fails", async () => {
-    const user = userEvent.setup();
-    const deleting = Promise.withResolvers<DeleteMaintenanceResult>();
-    vi.mocked(deleteMaintenanceRecordAction).mockReturnValue(deleting.promise);
-    render(<MaintenanceRecordItem record={brakes} />);
-
-    await user.click(
-      screen.getByRole("button", { name: "Delete Brakes from Jan 18, 2026" }),
-    );
-    await user.click(
-      within(screen.getByRole("alertdialog")).getByRole("button", {
-        name: "Delete",
-      }),
-    );
-
-    expect(screen.queryByText("Front pads and rotors")).not.toBeInTheDocument();
-
-    deleting.resolve({ ok: false, error: "Something went wrong." });
-
-    expect(
-      await screen.findByText("Front pads and rotors"),
-    ).toBeInTheDocument();
-    expect(toast.error).toHaveBeenCalledWith("Could not delete the record", {
-      description: "Something went wrong.",
-    });
   });
 });

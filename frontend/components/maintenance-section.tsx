@@ -10,6 +10,7 @@ import {
 import { MaintenanceRecordDialog } from "@/components/maintenance-record-dialog";
 import type { TimelineRecord } from "@/components/maintenance-record-item";
 import { MaintenanceTimeline } from "@/components/maintenance-timeline";
+import { RemoveMaintenanceRecordContext } from "@/components/remove-maintenance-record-context";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -41,6 +42,20 @@ function newestFirst(a: TimelineRecord, b: TimelineRecord): number {
   );
 }
 
+type RecordChange =
+  { type: "add"; record: TimelineRecord } | { type: "remove"; id: number };
+
+function applyRecordChange(
+  current: TimelineRecord[],
+  change: RecordChange,
+): TimelineRecord[] {
+  if (change.type === "add") {
+    return [...current, change.record].sort(newestFirst);
+  }
+
+  return current.filter((record) => record.id !== change.id);
+}
+
 export function MaintenanceSection({
   vehicle,
   records,
@@ -48,9 +63,9 @@ export function MaintenanceSection({
   vehicle: Vehicle;
   records: MaintenanceRecord[];
 }) {
-  const [shownRecords, addPendingRecord] = useOptimistic(
+  const [shownRecords, changeShownRecords] = useOptimistic(
     records as TimelineRecord[],
-    (current, record: TimelineRecord) => [...current, record].sort(newestFirst),
+    applyRecordChange,
   );
   const [addOpen, setAddOpen] = useState(false);
   const nextPendingId = useRef(0);
@@ -65,12 +80,15 @@ export function MaintenanceSection({
 
     if (validation.success) {
       nextPendingId.current -= 1;
-      addPendingRecord({
-        ...validation.data,
-        id: nextPendingId.current,
-        vehicle_id: vehicle.id,
-        created_at: new Date().toISOString(),
-        pending: true,
+      changeShownRecords({
+        type: "add",
+        record: {
+          ...validation.data,
+          id: nextPendingId.current,
+          vehicle_id: vehicle.id,
+          created_at: new Date().toISOString(),
+          pending: true,
+        },
       });
     }
 
@@ -101,7 +119,11 @@ export function MaintenanceSection({
       <CardContent>
         {shownRecords.length > 0 ? (
           <div className="border-t pt-4">
-            <MaintenanceTimeline records={shownRecords} />
+            <RemoveMaintenanceRecordContext
+              value={(id) => changeShownRecords({ type: "remove", id })}
+            >
+              <MaintenanceTimeline records={shownRecords} />
+            </RemoveMaintenanceRecordContext>
           </div>
         ) : (
           <Empty className="border py-10">
