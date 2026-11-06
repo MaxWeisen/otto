@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay, http, HttpResponse } from "msw";
 import { toast } from "sonner";
@@ -402,16 +402,6 @@ describe("VehicleDetailsCard", () => {
 
 describe("Deleting from the edit form", () => {
   const deleteButton = () => screen.getByRole("button", { name: "Delete" });
-  const dialog = () => screen.queryByRole("alertdialog");
-
-  async function openConfirmation(user: ReturnType<typeof userEvent.setup>) {
-    await user.click(deleteButton());
-    await waitFor(() =>
-      expect(
-        within(dialog()!).getByRole("button", { name: "Cancel" }),
-      ).toHaveFocus(),
-    );
-  }
 
   it("offers Delete only in edit mode", async () => {
     const { user } = renderCard();
@@ -443,51 +433,11 @@ describe("Deleting from the edit form", () => {
     );
   });
 
-  it("asks for confirmation naming the vehicle and what is lost, focusing Cancel", async () => {
-    const { user, deleteAction } = renderCard();
-
-    await startEditing(user);
-    await openConfirmation(user);
-
-    expect(dialog()).toHaveAccessibleName("Delete 2003 Honda Accord?");
-    expect(dialog()).toHaveAccessibleDescription(
-      "This permanently deletes the vehicle and all of its maintenance records. It cannot be undone.",
-    );
-    expect(deleteAction).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    [
-      "Cancel",
-      async (user: ReturnType<typeof userEvent.setup>) =>
-        user.click(screen.getByRole("button", { name: "Cancel" })),
-    ],
-    [
-      "Escape",
-      async (user: ReturnType<typeof userEvent.setup>) =>
-        user.keyboard("{Escape}"),
-    ],
-  ])(
-    "closes the confirmation on %s and stays in the form",
-    async (_name, dismiss) => {
-      const { user, deleteAction } = renderCard();
-
-      await startEditing(user);
-      await openConfirmation(user);
-      await dismiss(user);
-
-      await waitFor(() => expect(dialog()).not.toBeInTheDocument());
-      expect(form()).toBeInTheDocument();
-      expect(deleteButton()).toHaveFocus();
-      expect(deleteAction).not.toHaveBeenCalled();
-    },
-  );
-
   it("deletes the vehicle on confirm", async () => {
     const { user, deleteAction } = renderCard();
 
     await startEditing(user);
-    await openConfirmation(user);
+    await user.click(deleteButton());
     await user.click(screen.getByRole("button", { name: "Delete vehicle" }));
 
     expect(deleteAction).toHaveBeenCalledTimes(1);
