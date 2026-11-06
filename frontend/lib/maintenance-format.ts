@@ -1,17 +1,9 @@
+import { format, getYear, parseISO } from "date-fns";
+
 const mileageFormatter = new Intl.NumberFormat("en-US");
 const costFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
-});
-// Dates are calendar days, so they format in UTC to stay on the same day.
-const dayFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  timeZone: "UTC",
-});
-const fullDateFormatter = new Intl.DateTimeFormat("en-US", {
-  dateStyle: "medium",
-  timeZone: "UTC",
 });
 
 export function formatMileage(mileage: number): string {
@@ -24,11 +16,11 @@ export function formatCost(cost: string): string {
 }
 
 export function formatDay(date: string): string {
-  return dayFormatter.format(new Date(`${date}T00:00:00Z`));
+  return format(parseISO(date), "MMM d");
 }
 
 export function formatFullDate(date: string): string {
-  return fullDateFormatter.format(new Date(`${date}T00:00:00Z`));
+  return format(parseISO(date), "MMM d, yyyy");
 }
 
 export function groupByYear<T extends { performed_at: string }>(
@@ -37,7 +29,7 @@ export function groupByYear<T extends { performed_at: string }>(
   const groups: { year: string; records: T[] }[] = [];
 
   for (const record of records) {
-    const year = record.performed_at.slice(0, 4);
+    const year = String(getYear(parseISO(record.performed_at)));
     const last = groups.at(-1);
 
     if (last?.year === year) {

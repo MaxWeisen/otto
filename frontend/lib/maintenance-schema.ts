@@ -1,3 +1,5 @@
+import { tz } from "@date-fns/tz";
+import { format, isMatch } from "date-fns";
 import { z } from "zod";
 import { MIN_VEHICLE_YEAR, mileageSchema } from "@/lib/vehicle-schema";
 
@@ -28,7 +30,7 @@ export const MAX_DESCRIPTION_LENGTH = 255;
 export const MAX_NOTES_LENGTH = 10000;
 export const MIN_PERFORMED_AT = `${MIN_VEHICLE_YEAR}-01-01`;
 const MAX_COST_WHOLE_DIGITS = 8;
-const MAX_UTC_OFFSET_MS = 14 * 60 * 60 * 1000;
+const DATE_FORMAT = "yyyy-MM-dd";
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const COST_PATTERN = /^(\d+)(?:\.(\d{1,2}))?$/;
 
@@ -58,25 +60,15 @@ const MAINTENANCE_FIELD_LABELS: Record<MaintenanceField, string> = {
   notes: "Notes",
 };
 
-// In the visitor's time zone, not UTC.
+// In the visitor's time zone.
 export function today(): string {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-
-  return `${now.getFullYear()}-${month}-${day}`;
+  return format(new Date(), DATE_FORMAT);
 }
 
-// The latest calendar date that has started anywhere on Earth (UTC+14),
-// matching the backend's limit regardless of this machine's time zone.
+// The latest calendar date that has started anywhere on Earth, matching the
+// backend's limit regardless of this machine's time zone.
 function latestStartedDate(): string {
-  return new Date(Date.now() + MAX_UTC_OFFSET_MS).toISOString().slice(0, 10);
-}
-
-function isCalendarDate(value: string): boolean {
-  const date = new Date(`${value}T00:00:00Z`);
-
-  return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
+  return format(new Date(), DATE_FORMAT, { in: tz("+14:00") });
 }
 
 function text(label: string, maxLength: number) {
@@ -106,7 +98,7 @@ const performedAt = z
   .string()
   .trim()
   .refine((value) => value !== "", { error: "Date is required", abort: true })
-  .refine((value) => DATE_PATTERN.test(value) && isCalendarDate(value), {
+  .refine((value) => DATE_PATTERN.test(value) && isMatch(value, DATE_FORMAT), {
     error: "Date must be a valid date",
     abort: true,
   })
