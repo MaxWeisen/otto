@@ -15,7 +15,6 @@ export function formatMileage(mileage: number): string {
 }
 
 export function formatCost(cost: string): string {
-  // Intl formats decimal strings exactly, without going through a float.
   return costFormatter.format(cost as Intl.StringNumericLiteral);
 }
 

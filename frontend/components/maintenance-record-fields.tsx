@@ -45,7 +45,6 @@ export function MaintenanceRecordFields({
   errors: MaintenanceFieldErrors | undefined;
 }) {
   const [type, setType] = useState(values.type);
-  // A field's error clears once it is edited, until the next errors arrive.
   const [edited, setEdited] = useState<ReadonlySet<MaintenanceField>>(
     new Set(),
   );

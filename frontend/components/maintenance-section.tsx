@@ -46,7 +46,6 @@ export function MaintenanceSection({
   records,
 }: {
   vehicle: Vehicle;
-  /** Newest first, as the API lists them. */
   records: MaintenanceRecord[];
 }) {
   const [shownRecords, addPendingRecord] = useOptimistic(
@@ -56,7 +55,6 @@ export function MaintenanceSection({
   const [addOpen, setAddOpen] = useState(false);
   const nextPendingId = useRef(0);
 
-  // The new record shows as pending in the timeline until the server answers.
   async function createRecord(
     previous: MaintenanceFormState,
     formData: FormData,

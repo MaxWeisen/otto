@@ -7,7 +7,6 @@ import { groupByYear } from "@/lib/maintenance-format";
 export function MaintenanceTimeline({
   records,
 }: {
-  /** Newest first. */
   records: readonly TimelineRecord[];
 }) {
   return (

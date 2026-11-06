@@ -29,8 +29,7 @@ export type DeleteMaintenanceResult =
 
 const RECORD_GONE = "This maintenance record no longer exists.";
 
-// A 404 means the record or the whole vehicle is gone, and a gone vehicle
-// shows the not-found page.
+// A 404 can mean the whole vehicle is gone, which shows the not-found page.
 async function refreshAfterRecordGone(vehicleId: number) {
   await getVehicle(String(vehicleId));
   revalidatePath("/(authenticated)/vehicles", "layout");
@@ -68,8 +67,6 @@ export async function createMaintenanceRecordAction(
     return failureState(values, result);
   }
 
-  // Refresh every page under the vehicles layout. The path names the route
-  // group because Next derives layout cache tags from the route file path.
   revalidatePath("/(authenticated)/vehicles", "layout");
 
   return { values, saved: true };

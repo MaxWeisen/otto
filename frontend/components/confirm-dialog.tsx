@@ -43,7 +43,6 @@ export function ConfirmDialog({
   const confirmButton = useRef<HTMLButtonElement>(null);
   const wasPending = useRef(pending);
 
-  // The confirm button loses focus while it is disabled.
   useEffect(() => {
     if (wasPending.current && !pending) {
       confirmButton.current?.focus();

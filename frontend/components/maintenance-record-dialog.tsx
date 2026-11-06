@@ -30,9 +30,7 @@ import {
 } from "@/lib/maintenance-schema";
 
 type MaintenanceRecordDialogProps = {
-  /** The record to edit; without one the dialog adds a new record. */
   record?: MaintenanceRecord;
-  /** The mileage a new record starts from. */
   defaultMileage?: number | null;
   action: (
     state: MaintenanceFormState,
@@ -88,8 +86,7 @@ export function MaintenanceRecordDialog({
   );
 
   const [clientErrors, setClientErrors] = useState<MaintenanceFieldErrors>();
-  // The inputs are uncontrolled, so each new state or opening remounts the
-  // form to show its values.
+  // The inputs are uncontrolled, so the form remounts to show new values.
   const [shown, setShown] = useState({ state, open });
   const [formKey, setFormKey] = useState(0);
 

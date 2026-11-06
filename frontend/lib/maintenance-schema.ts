@@ -3,9 +3,6 @@ import { format, isMatch } from "date-fns";
 import { z } from "zod";
 import { MIN_VEHICLE_YEAR, mileageSchema } from "@/lib/vehicle-schema";
 
-// These rules mirror the backend's validation in
-// backend/internal/maintenance/handler.go and backend/internal/money, and
-// the maintenance_records table schema.
 export const MAINTENANCE_TYPES = [
   "oil_change",
   "tire_rotation",
@@ -60,13 +57,11 @@ const MAINTENANCE_FIELD_LABELS: Record<MaintenanceField, string> = {
   notes: "Notes",
 };
 
-// In the visitor's time zone.
 export function today(): string {
   return format(new Date(), DATE_FORMAT);
 }
 
-// The latest calendar date that has started anywhere on Earth, matching the
-// backend's limit regardless of this machine's time zone.
+// The latest date that has started anywhere (UTC+14), as the backend allows.
 function latestStartedDate(): string {
   return format(new Date(), DATE_FORMAT, { in: tz("+14:00") });
 }
@@ -93,7 +88,6 @@ const type = z
   )
   .transform((value) => value as MaintenanceType);
 
-// Dates compare as YYYY-MM-DD strings.
 const performedAt = z
   .string()
   .trim()
@@ -145,7 +139,6 @@ export const maintenanceFormSchema = z.object({
   notes: text("Notes", MAX_NOTES_LENGTH).transform((value) => value || null),
 });
 
-// Cost stays a decimal string so money never passes through a float.
 export type MaintenanceInput = z.output<typeof maintenanceFormSchema>;
 
 export function validateMaintenanceForm(values: MaintenanceFormValues) {
@@ -161,7 +154,6 @@ export function validateMaintenanceForm(values: MaintenanceFormValues) {
   };
 }
 
-// The backend names the field first, as in "cost must not be negative".
 export function maintenanceApiErrors(
   message: string,
 ): { errors: MaintenanceFieldErrors } | { message: string } {
@@ -181,7 +173,6 @@ export function maintenanceApiErrors(
 
 const mileageFormatter = new Intl.NumberFormat("en-US");
 
-/** A record's form values, or a new record's starting from today. */
 export function maintenanceFormValues(
   record:
     | Pick<
