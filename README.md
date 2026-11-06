@@ -123,7 +123,9 @@ Set `VPIC_BASE_URL` to point it at another vPIC-compatible server; it defaults t
 
 ### Running tests
 
-Unit and component tests use Vitest and need no running services:
+Unit and component tests use Vitest and need no running services.
+They live in `frontend/test/`, mirroring the source path of the file they cover, while the Playwright end-to-end tests live in `frontend/e2e/`.
+To run them:
 
 ```sh
 cd frontend
