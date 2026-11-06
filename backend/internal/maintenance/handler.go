@@ -2,6 +2,7 @@ package maintenance
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -55,12 +56,12 @@ var now = time.Now
 // record. PerformedAt is a YYYY-MM-DD date and Cost an exact decimal amount
 // such as "49.99", so money never passes through a float.
 type RecordInput struct {
-	Type        string  `json:"type"`
-	Description string  `json:"description"`
-	PerformedAt string  `json:"performed_at"`
-	Mileage     *int32  `json:"mileage"`
-	Cost        *string `json:"cost"`
-	Notes       *string `json:"notes"`
+	Type        string          `json:"type"`
+	Description string          `json:"description"`
+	PerformedAt string          `json:"performed_at"`
+	Mileage     json.RawMessage `json:"mileage"`
+	Cost        *string         `json:"cost"`
+	Notes       *string         `json:"notes"`
 }
 
 type recordService interface {
@@ -152,10 +153,10 @@ func (h *Handler) Create(
 		return
 	}
 
-	params, err := input.normalizeAndValidate()
+	params, fieldErrors := input.normalizeAndValidate()
 
-	if err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, err.Error())
+	if len(fieldErrors) > 0 {
+		httpx.WriteFieldErrors(w, fieldErrors)
 		return
 	}
 
@@ -210,10 +211,10 @@ func (h *Handler) Update(
 		return
 	}
 
-	params, err := input.normalizeAndValidate()
+	params, fieldErrors := input.normalizeAndValidate()
 
-	if err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, err.Error())
+	if len(fieldErrors) > 0 {
+		httpx.WriteFieldErrors(w, fieldErrors)
 		return
 	}
 
@@ -305,119 +306,119 @@ func writeServiceError(
 }
 
 // normalizeAndValidate trims and normalizes the input, checks it against
-// the database schema limits and the domain rules for record type, service
-// date, mileage and cost, and converts it into the stored types.
-func (in RecordInput) normalizeAndValidate() (RecordParams, error) {
+// the database schema limits and the domain rules, and converts it into the
+// stored types. It returns a message for each invalid field.
+func (in RecordInput) normalizeAndValidate() (RecordParams, map[string]string) {
+	errs := map[string]string{}
 	params := RecordParams{
 		Type:        strings.TrimSpace(in.Type),
 		Description: strings.TrimSpace(in.Description),
-		Mileage:     in.Mileage,
 		Notes:       validate.NormalizeOptional(in.Notes),
 	}
 
-	if params.Type == "" {
-		return RecordParams{}, errors.New("type is required")
-	}
-
-	if !slices.Contains(recordTypes, params.Type) {
-		return RecordParams{}, fmt.Errorf(
-			"type must be one of: %s",
-			strings.Join(recordTypes, ", "),
-		)
+	switch {
+	case params.Type == "":
+		errs["type"] = "Type is required"
+	case !slices.Contains(recordTypes, params.Type):
+		errs["type"] = "Choose a type from the list"
 	}
 
 	if params.Description == "" {
-		return RecordParams{}, errors.New("description is required")
+		errs["description"] = "Description is required"
+	} else if err := validate.Text("Description", &params.Description, maxDescriptionLength); err != nil {
+		errs["description"] = err.Error()
 	}
 
-	textChecks := []struct {
-		field     string
-		value     *string
-		maxLength int
-	}{
-		{"description", &params.Description, maxDescriptionLength},
-		{"notes", params.Notes, maxNotesLength},
+	if err := validate.Text("Notes", params.Notes, maxNotesLength); err != nil {
+		errs["notes"] = err.Error()
 	}
 
-	for _, check := range textChecks {
-		err := validate.Text(check.field, check.value, check.maxLength)
+	performedAt, msg := parsePerformedAt(strings.TrimSpace(in.PerformedAt))
 
-		if err != nil {
-			return RecordParams{}, err
-		}
+	if msg != "" {
+		errs["performed_at"] = msg
+	} else {
+		params.PerformedAt = pgtype.Date{Time: performedAt, Valid: true}
 	}
 
-	performedAt, err := parsePerformedAt(strings.TrimSpace(in.PerformedAt))
+	params.Mileage, msg = parseMileage(in.Mileage)
 
-	if err != nil {
-		return RecordParams{}, err
+	if msg != "" {
+		errs["mileage"] = msg
 	}
 
-	params.PerformedAt = pgtype.Date{Time: performedAt, Valid: true}
+	params.Cost, msg = parseCost(validate.NormalizeOptional(in.Cost))
 
-	if params.Mileage != nil && *params.Mileage < 0 {
-		return RecordParams{}, errors.New("mileage must not be negative")
+	if msg != "" {
+		errs["cost"] = msg
 	}
 
-	cost, err := parseCost(validate.NormalizeOptional(in.Cost))
-
-	if err != nil {
-		return RecordParams{}, err
-	}
-
-	params.Cost = cost
-
-	return params, nil
+	return params, errs
 }
 
 // parsePerformedAt parses a YYYY-MM-DD service date and checks that it is
 // neither before minPerformedAt nor in the future.
-func parsePerformedAt(value string) (time.Time, error) {
+func parsePerformedAt(value string) (time.Time, string) {
 	if value == "" {
-		return time.Time{}, errors.New("performed_at is required")
+		return time.Time{}, "Date is required"
 	}
 
 	date, err := time.Parse(time.DateOnly, value)
 
 	if err != nil {
-		return time.Time{}, errors.New("performed_at must be a date in YYYY-MM-DD format")
+		return time.Time{}, "Date must be a valid date"
 	}
 
 	if date.Before(minPerformedAt) {
-		return time.Time{}, fmt.Errorf(
-			"performed_at must not be before %s",
-			minPerformedAt.Format(time.DateOnly),
+		return time.Time{}, fmt.Sprintf(
+			"Date must not be before %d",
+			minPerformedAt.Year(),
 		)
 	}
 
-	latest := now().UTC().Add(maxUTCOffset)
-
-	if date.After(latest) {
-		return time.Time{}, errors.New("performed_at must not be in the future")
+	if date.After(now().UTC().Add(maxUTCOffset)) {
+		return time.Time{}, "Date must not be in the future"
 	}
 
-	return date, nil
+	return date, ""
+}
+
+// parseMileage reads an optional whole-number mileage. Absent and null stay
+// nil.
+func parseMileage(raw json.RawMessage) (*int32, string) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, ""
+	}
+
+	var mileage int32
+
+	if json.Unmarshal(raw, &mileage) != nil {
+		return nil, "Mileage must be a whole number"
+	}
+
+	if mileage < 0 {
+		return nil, "Mileage must not be negative"
+	}
+
+	return &mileage, ""
 }
 
 // parseCost parses an optional decimal cost such as "49.99" into an exact
 // amount. A nil cost stays nil.
-func parseCost(value *string) (*money.Amount, error) {
+func parseCost(value *string) (*money.Amount, string) {
 	if value == nil {
-		return nil, nil
+		return nil, ""
 	}
 
 	cost, err := money.Parse(*value)
 
 	if errors.Is(err, money.ErrNegative) {
-		return nil, errors.New("cost must not be negative")
+		return nil, "Cost must not be negative"
 	}
 
 	if err != nil {
-		return nil, errors.New(
-			"cost must be a decimal amount with at most 8 digits before " +
-				"and 2 after the decimal point, e.g. \"49.99\"",
-		)
+		return nil, "Cost must be an amount like 49.99"
 	}
 
-	return &cost, nil
+	return &cost, ""
 }
