@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { router } from "@/test/next-mocks";
-import RootError from "./error";
+import RootError from "@/app/error";
 
 describe("RootError", () => {
   it("explains the failure and tries again", async () => {

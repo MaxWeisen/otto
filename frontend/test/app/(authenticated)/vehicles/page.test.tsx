@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { describe, expect, it } from "vitest";
 import { RedirectError, router } from "@/test/next-mocks";
 import { API_URL, server } from "@/test/server";
-import VehiclesPage from "./page";
+import VehiclesPage from "@/app/(authenticated)/vehicles/page";
 
 async function renderPage(status?: string) {
   const page = await VehiclesPage({
