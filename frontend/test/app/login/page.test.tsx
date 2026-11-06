@@ -3,7 +3,7 @@ import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 import { cookieJar, RedirectError } from "@/test/next-mocks";
 import { API_URL, server } from "@/test/server";
-import LoginPage from "./page";
+import LoginPage from "@/app/login/page";
 
 async function renderPage() {
   const page = await LoginPage({ searchParams: Promise.resolve({}) });

@@ -3,7 +3,7 @@ import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 import { cookieJar, RedirectError } from "@/test/next-mocks";
 import { API_URL, server } from "@/test/server";
-import LandingPage from "./page";
+import LandingPage from "@/app/page";
 
 describe("LandingPage", () => {
   it("sends a signed-in user to their vehicles", async () => {

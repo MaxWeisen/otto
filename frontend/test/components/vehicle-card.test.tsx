@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { VehicleCard } from "./vehicle-card";
+import { VehicleCard } from "@/components/vehicle-card";
 
 describe("VehicleCard", () => {
   it("wraps the VIN instead of truncating it", () => {
