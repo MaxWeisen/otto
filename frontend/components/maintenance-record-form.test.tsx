@@ -54,9 +54,11 @@ describe("MaintenanceRecordForm", () => {
 
     await user.click(screen.getByRole("button", { name: "Add record" }));
 
-    expect(
-      await screen.findByRole("textbox", { name: "Description" }),
-    ).toHaveAccessibleDescription("Description is required");
+    await waitFor(() =>
+      expect(
+        screen.getByRole("textbox", { name: "Description" }),
+      ).toHaveAccessibleDescription("Description is required"),
+    );
     expect(onClose).not.toHaveBeenCalled();
   });
 
