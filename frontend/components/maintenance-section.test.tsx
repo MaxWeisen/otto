@@ -6,7 +6,6 @@ import {
   createMaintenanceRecordAction,
   deleteMaintenanceRecordAction,
   type DeleteMaintenanceResult,
-  type MaintenanceFormState,
 } from "@/app/(authenticated)/vehicles/[id]/actions";
 import { MaintenanceSection } from "@/components/maintenance-section";
 import type { MaintenanceRecord } from "@/lib/maintenance";
@@ -97,10 +96,11 @@ describe("MaintenanceSection", () => {
     expect(screen.getByText("Akebono ceramic pads.")).toBeVisible();
   });
 
-  it("shows a new record as saving, then removes it when the server rejects it", async () => {
+  it("adds a record to this vehicle without listing it before it saves", async () => {
     const user = userEvent.setup();
-    const saving = Promise.withResolvers<MaintenanceFormState>();
-    vi.mocked(createMaintenanceRecordAction).mockReturnValue(saving.promise);
+    vi.mocked(createMaintenanceRecordAction).mockResolvedValue({
+      errors: { type: "Type is required" },
+    });
     render(
       <MaintenanceSection
         vehicle={accord}
@@ -111,19 +111,14 @@ describe("MaintenanceSection", () => {
     await user.click(
       screen.getByRole("button", { name: "Add your first record" }),
     );
-    await user.type(
-      screen.getByRole("textbox", { name: "Description" }),
-      "Synthetic 5W-30",
-    );
     await user.click(screen.getByRole("button", { name: "Add record" }));
 
-    const entry = await screen.findByRole("listitem", { hidden: true });
-    expect(entry).toHaveTextContent("Synthetic 5W-30");
-    expect(entry).toHaveTextContent("Saving...");
-
-    saving.resolve({ errors: { type: "Type is required" } });
-
     expect(await screen.findByText("Type is required")).toBeInTheDocument();
+    expect(createMaintenanceRecordAction).toHaveBeenCalledWith(
+      7,
+      {},
+      expect.any(FormData),
+    );
     expect(
       screen.queryByRole("listitem", { hidden: true }),
     ).not.toBeInTheDocument();
@@ -161,5 +156,57 @@ describe("MaintenanceSection", () => {
     expect(toast.error).toHaveBeenCalledWith("Could not delete the record", {
       description: "Something went wrong.",
     });
+  });
+
+  it("moves focus to Add record after deleting a record", async () => {
+    const user = userEvent.setup();
+    vi.mocked(deleteMaintenanceRecordAction).mockResolvedValue({ ok: true });
+    render(
+      <MaintenanceSection
+        vehicle={accord}
+        records={[brakes, { ...brakes, id: 32 }]}
+      />,
+    );
+
+    await user.click(
+      screen.getAllByRole("button", {
+        name: "Delete Brakes from Jan 18, 2026",
+      })[0],
+    );
+    await user.click(
+      within(screen.getByRole("alertdialog")).getByRole("button", {
+        name: "Delete",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Add record" })).toHaveFocus(),
+    );
+  });
+
+  it("moves focus to the heading after deleting the last record", async () => {
+    const user = userEvent.setup();
+    vi.mocked(deleteMaintenanceRecordAction).mockResolvedValue({ ok: true });
+    render(
+      <MaintenanceSection
+        vehicle={accord}
+        records={[brakes]}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Delete Brakes from Jan 18, 2026" }),
+    );
+    await user.click(
+      within(screen.getByRole("alertdialog")).getByRole("button", {
+        name: "Delete",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "Maintenance" }),
+      ).toHaveFocus(),
+    );
   });
 });

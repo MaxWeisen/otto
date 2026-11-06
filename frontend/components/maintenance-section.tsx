@@ -1,8 +1,7 @@
 "use client";
 
-import { startTransition, useOptimistic, useState } from "react";
+import { startTransition, useOptimistic, useRef, useState } from "react";
 import { unstable_rethrow } from "next/navigation";
-import { compareDesc, format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import {
   ClipboardTextIcon,
@@ -10,7 +9,6 @@ import {
   DropIcon,
   PencilSimpleIcon,
   PlusIcon,
-  SpinnerIcon,
   TireIcon,
   ToolboxIcon,
   TrashIcon,
@@ -21,7 +19,6 @@ import {
   deleteMaintenanceRecordAction,
   updateMaintenanceRecordAction,
   type DeleteMaintenanceResult,
-  type MaintenanceFormState,
 } from "@/app/(authenticated)/vehicles/[id]/actions";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
@@ -42,10 +39,8 @@ import {
   formatMileage,
   formatRecordName,
   groupByYear,
-  type MaintenanceType,
 } from "@/lib/maintenance-format";
 import type { Vehicle } from "@/lib/vehicles";
-import { cn } from "@/lib/utils";
 
 const TYPE_ICONS = {
   oil_change: DropIcon,
@@ -56,37 +51,6 @@ const TYPE_ICONS = {
   other: ToolboxIcon,
 };
 
-type ShownRecord = MaintenanceRecord & { pending?: boolean };
-type Change = { add: ShownRecord } | { remove: number };
-
-function applyChange(records: ShownRecord[], change: Change) {
-  if ("remove" in change) {
-    return records.filter((record) => record.id !== change.remove);
-  }
-
-  return [change.add, ...records].sort((a, b) =>
-    compareDesc(parseISO(a.performed_at), parseISO(b.performed_at)),
-  );
-}
-
-function pendingRecord(vehicleId: number, formData: FormData): ShownRecord {
-  const field = (name: string) => String(formData.get(name) ?? "").trim();
-  const type = field("type");
-
-  return {
-    id: -Date.now(),
-    vehicle_id: vehicleId,
-    type: type in TYPE_ICONS ? (type as MaintenanceType) : "other",
-    description: field("description"),
-    performed_at: field("performed_at") || format(new Date(), "yyyy-MM-dd"),
-    mileage: null,
-    cost: null,
-    notes: null,
-    created_at: "",
-    pending: true,
-  };
-}
-
 export function MaintenanceSection({
   vehicle,
   records,
@@ -94,25 +58,23 @@ export function MaintenanceSection({
   vehicle: Vehicle;
   records: MaintenanceRecord[];
 }) {
-  const [shown, change] = useOptimistic<ShownRecord[], Change>(
-    records,
-    applyChange,
+  const [shown, remove] = useOptimistic(records, (current, id: number) =>
+    current.filter((record) => record.id !== id),
   );
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<MaintenanceRecord>();
   const [deleting, setDeleting] = useState<MaintenanceRecord>();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [openNotes, setOpenNotes] = useState<number[]>([]);
-
-  async function create(state: MaintenanceFormState, formData: FormData) {
-    change({ add: pendingRecord(vehicle.id, formData) });
-    return createMaintenanceRecordAction(vehicle.id, state, formData);
-  }
+  const heading = useRef<HTMLDivElement>(null);
+  const addRecord = useRef<HTMLButtonElement>(null);
+  const confirmed = useRef(false);
 
   function deleteRecord(record: MaintenanceRecord) {
+    confirmed.current = true;
     setConfirmOpen(false);
     startTransition(async () => {
-      change({ remove: record.id });
+      remove(record.id);
       const result: DeleteMaintenanceResult =
         await deleteMaintenanceRecordAction(record.vehicle_id, record.id).catch(
           (error) => {
@@ -142,8 +104,13 @@ export function MaintenanceSection({
     );
   }
 
-  const addButton = (label: string, size?: "sm") => (
+  const addButton = (
+    label: string,
+    size?: "sm",
+    ref?: React.Ref<HTMLButtonElement>,
+  ) => (
     <Button
+      ref={ref}
       size={size}
       onClick={() => setAdding(true)}
     >
@@ -156,14 +123,17 @@ export function MaintenanceSection({
     <Card>
       <CardHeader>
         <CardTitle
+          ref={heading}
           role="heading"
           aria-level={2}
+          tabIndex={-1}
+          className="outline-none"
         >
           Maintenance
         </CardTitle>
         {shown.length > 0 && (
           <CardAction className="row-span-1 -my-1.5">
-            {addButton("Add record", "sm")}
+            {addButton("Add record", "sm", addRecord)}
           </CardAction>
         )}
       </CardHeader>
@@ -198,11 +168,7 @@ export function MaintenanceSection({
                     return (
                       <li
                         key={record.id}
-                        aria-busy={record.pending || undefined}
-                        className={cn(
-                          "group/entry relative flex gap-3 pb-5 last:pb-0",
-                          record.pending && "opacity-60",
-                        )}
+                        className="group/entry relative flex gap-3 pb-5 last:pb-0"
                       >
                         <span
                           aria-hidden
@@ -232,34 +198,28 @@ export function MaintenanceSection({
                                 {record.description}
                               </p>
                             </div>
-                            {record.pending ? (
-                              <span className="flex h-7 shrink-0 items-center gap-1.5 text-muted-foreground">
-                                <SpinnerIcon className="size-3.5 animate-spin" />
-                                Saving...
-                              </span>
-                            ) : (
-                              <div className="-my-1 -mr-1.5 flex shrink-0">
-                                <Button
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  aria-label={`Edit ${name}`}
-                                  onClick={() => setEditing(record)}
-                                >
-                                  <PencilSimpleIcon />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  aria-label={`Delete ${name}`}
-                                  onClick={() => {
-                                    setDeleting(record);
-                                    setConfirmOpen(true);
-                                  }}
-                                >
-                                  <TrashIcon />
-                                </Button>
-                              </div>
-                            )}
+                            <div className="-my-1 -mr-1.5 flex shrink-0">
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label={`Edit ${name}`}
+                                onClick={() => setEditing(record)}
+                              >
+                                <PencilSimpleIcon />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label={`Delete ${name}`}
+                                onClick={() => {
+                                  confirmed.current = false;
+                                  setDeleting(record);
+                                  setConfirmOpen(true);
+                                }}
+                              >
+                                <TrashIcon />
+                              </Button>
+                            </div>
                           </div>
                           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground tabular-nums empty:hidden">
                             {record.mileage !== null && (
@@ -302,7 +262,7 @@ export function MaintenanceSection({
       {adding && (
         <MaintenanceRecordForm
           defaultMileage={vehicle.mileage}
-          action={create}
+          action={createMaintenanceRecordAction.bind(null, vehicle.id)}
           onClose={() => setAdding(false)}
         />
       )}
@@ -328,6 +288,9 @@ export function MaintenanceSection({
         confirmLabel="Delete"
         destructive
         onConfirm={() => deleting && deleteRecord(deleting)}
+        finalFocus={() =>
+          !confirmed.current || (addRecord.current ?? heading.current)
+        }
       />
     </Card>
   );
