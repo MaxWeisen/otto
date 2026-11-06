@@ -10,6 +10,7 @@ import {
   useTransition,
 } from "react";
 import { unstable_rethrow } from "next/navigation";
+import { compareDesc, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { PlusIcon, WrenchIcon } from "@phosphor-icons/react";
 import type {
@@ -102,7 +103,7 @@ async function submitForm(
 
 function newestFirst(a: TimelineRecord, b: TimelineRecord): number {
   return (
-    b.performed_at.localeCompare(a.performed_at) ||
+    compareDesc(parseISO(a.performed_at), parseISO(b.performed_at)) ||
     Number(!!b.pending) - Number(!!a.pending) ||
     b.id - a.id
   );
