@@ -55,12 +55,7 @@ export default function RootLayout({
           defaultTheme="system"
           enableSystem
         >
-          <Toaster
-            offset={{ bottom: "calc(5.25rem + env(safe-area-inset-bottom))" }}
-            mobileOffset={{
-              bottom: "calc(4.75rem + env(safe-area-inset-bottom))",
-            }}
-          />
+          <Toaster />
           {children}
           <ThemeToggle />
         </ThemeProvider>
