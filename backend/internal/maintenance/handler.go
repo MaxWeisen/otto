@@ -54,7 +54,9 @@ var now = time.Now
 
 // RecordInput is the request body for creating or replacing a maintenance
 // record. PerformedAt is a YYYY-MM-DD date and Cost an exact decimal amount
-// such as "49.99", so money never passes through a float.
+// such as "49.99", so money never passes through a float. Mileage is kept
+// raw so a value that is not a whole number is reported as a mileage field
+// error instead of failing to decode the whole body.
 type RecordInput struct {
 	Type        string          `json:"type"`
 	Description string          `json:"description"`
