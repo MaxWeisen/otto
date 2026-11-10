@@ -22,8 +22,8 @@ const RECORD_GONE = "This maintenance record no longer exists.";
 
 function readInput(formData: FormData): MaintenanceInput {
   const text = (name: string) => String(formData.get(name) ?? "").trim();
-  const mileage = text("mileage").replace(/[\s,]/g, "");
-  const cost = text("cost").replace(/[\s,$]/g, "");
+  const mileage = text("mileage");
+  const cost = text("cost").replace(/^\$/, "");
 
   return {
     type: text("type"),

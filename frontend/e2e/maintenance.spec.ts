@@ -112,7 +112,7 @@ test("adds, edits and deletes a maintenance record", async ({ page }) => {
   await editDialog
     .getByRole("textbox", { name: /^Description/ })
     .fill("Replaced washer reservoir");
-  await editDialog.getByRole("textbox", { name: /^Cost/ }).fill("1234.56");
+  await editDialog.getByRole("textbox", { name: /^Cost/ }).fill("1,234.56");
   await editDialog.getByRole("button", { name: "Save" }).click();
 
   await expect(editDialog).toHaveCount(0);

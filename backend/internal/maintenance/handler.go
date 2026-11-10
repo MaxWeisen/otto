@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -52,11 +54,16 @@ const maxUTCOffset = 14 * time.Hour
 
 var now = time.Now
 
+// groupedDigits matches a whole number written without separators or with a
+// comma before every group of three digits, such as 84500 or 84,500.
+var groupedDigits = regexp.MustCompile(`^(?:[0-9]+|[0-9]{1,3}(?:,[0-9]{3})+)$`)
+
 // RecordInput is the request body for creating or replacing a maintenance
 // record. PerformedAt is a YYYY-MM-DD date and Cost an exact decimal amount
-// such as "49.99", so money never passes through a float. Mileage is kept
-// raw so a value that is not a whole number is reported as a mileage field
-// error instead of failing to decode the whole body.
+// such as "1,234.56", so money never passes through a float. Mileage is a
+// JSON number or a string such as "84,500", kept raw so a value that is not
+// a whole number is reported as a mileage field error instead of failing to
+// decode the whole body.
 type RecordInput struct {
 	Type        string          `json:"type"`
 	Description string          `json:"description"`
@@ -385,41 +392,73 @@ func parsePerformedAt(value string) (time.Time, string) {
 	return date, ""
 }
 
-// parseMileage reads an optional whole-number mileage. Absent and null stay
+// parseMileage reads an optional whole-number mileage from a JSON number or
+// a string with optional thousands separators. Absent, null and blank stay
 // nil.
 func parseMileage(raw json.RawMessage) (*int32, string) {
 	if len(raw) == 0 || string(raw) == "null" {
 		return nil, ""
 	}
 
-	var mileage int32
+	text := string(raw)
 
-	if json.Unmarshal(raw, &mileage) != nil {
-		return nil, "Mileage must be a whole number"
+	if json.Unmarshal(raw, &text) == nil {
+		text = strings.TrimSpace(text)
+
+		if text == "" {
+			return nil, ""
+		}
 	}
 
-	if mileage < 0 {
+	digits, negative := strings.CutPrefix(text, "-")
+
+	if !groupedDigits.MatchString(digits) {
+		return nil, "Mileage must be a whole number like 84,500"
+	}
+
+	mileage, err := strconv.ParseInt(strings.ReplaceAll(digits, ",", ""), 10, 32)
+
+	if err != nil {
+		return nil, "Mileage must be a whole number like 84,500"
+	}
+
+	if negative && mileage != 0 {
 		return nil, "Mileage must not be negative"
 	}
 
-	return &mileage, ""
+	result := int32(mileage)
+
+	return &result, ""
 }
 
-// parseCost parses an optional decimal cost such as "49.99" into an exact
-// amount. A nil cost stays nil.
+// parseCost parses an optional decimal cost with optional thousands
+// separators, such as "1,234.56", into an exact amount. A nil cost stays
+// nil.
 func parseCost(value *string) (*money.Amount, string) {
 	if value == nil {
 		return nil, ""
 	}
 
-	cost, err := money.Parse(*value)
+	whole, fraction, hasFraction := strings.Cut(*value, ".")
+
+	if !groupedDigits.MatchString(strings.TrimPrefix(whole, "-")) {
+		return nil, "Cost must be an amount like 1,234.56"
+	}
+
+	plain := strings.ReplaceAll(whole, ",", "")
+
+	if hasFraction {
+		plain += "." + fraction
+	}
+
+	cost, err := money.Parse(plain)
 
 	if errors.Is(err, money.ErrNegative) {
 		return nil, "Cost must not be negative"
 	}
 
 	if err != nil {
-		return nil, "Cost must be an amount like 49.99"
+		return nil, "Cost must be an amount like 1,234.56"
 	}
 
 	return &cost, ""

@@ -28,7 +28,7 @@ const fields = {
 };
 
 describe("createMaintenanceRecordAction", () => {
-  it("sends converted values and refreshes the vehicle pages", async () => {
+  it("sends the typed values and refreshes the vehicle pages", async () => {
     let body: unknown;
     server.use(
       http.post(
@@ -47,7 +47,7 @@ describe("createMaintenanceRecordAction", () => {
       type: "oil_change",
       performed_at: "2026-06-01",
       description: "Synthetic 5W-30",
-      mileage: 84500,
+      mileage: "84,500",
       cost: null,
       notes: null,
     });

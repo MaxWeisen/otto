@@ -125,6 +125,7 @@ Each vehicle's maintenance history lives under `/api/vehicles/<id>/maintenance`,
 
 - `GET /` lists the records, `POST /` adds one, and `GET`, `PUT` and `DELETE /<recordId>` read, replace and remove a single record.
 - A vehicle or record that belongs to another user answers 404 and is left unchanged.
+- `mileage` is a JSON number or a string, and `cost` a string; both may use commas as thousands separators, such as `"84,500"` or `"1,234.56"`, and any other comma is a field error.
 - An invalid record answers 400 with `{"error": "...", "errors": {"<field>": "<message>"}}`, one message per invalid field, which the frontend shows next to each field.
 - Adding or updating a record with a mileage higher than the vehicle's raises the vehicle's mileage to match, in the same transaction as the record write.
   The vehicle's mileage is never lowered, and deleting a record leaves it alone.

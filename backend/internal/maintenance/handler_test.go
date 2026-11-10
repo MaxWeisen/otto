@@ -29,7 +29,8 @@ var fixedNow = time.Date(2026, time.June, 15, 12, 0, 0, 0, time.UTC)
 // already June 16 in UTC+14.
 const fixedLatestDate = "2026-06-16"
 
-const costErr = "Cost must be an amount like 49.99"
+const costErr = "Cost must be an amount like 1,234.56"
+const mileageErr = "Mileage must be a whole number like 84,500"
 
 func TestMain(m *testing.M) {
 	// Set before any test runs, so parallel tests only ever read it.
@@ -108,14 +109,25 @@ func TestNormalizeAndValidate(t *testing.T) {
 		{name: "impossible date", modify: func(in *RecordInput) { in.PerformedAt = "2026-02-30" }, field: "performed_at", wantErr: "Date must be a valid date"},
 		{name: "too old date", modify: func(in *RecordInput) { in.PerformedAt = "1885-12-31" }, field: "performed_at", wantErr: "Date must not be before 1886"},
 		{name: "future date", modify: func(in *RecordInput) { in.PerformedAt = "2026-06-17" }, field: "performed_at", wantErr: "Date must not be in the future"},
-		{name: "fractional mileage", modify: func(in *RecordInput) { in.Mileage = json.RawMessage("1.5") }, field: "mileage", wantErr: "Mileage must be a whole number"},
-		{name: "text mileage", modify: func(in *RecordInput) { in.Mileage = json.RawMessage(`"abc"`) }, field: "mileage", wantErr: "Mileage must be a whole number"},
+		{name: "fractional mileage", modify: func(in *RecordInput) { in.Mileage = json.RawMessage("1.5") }, field: "mileage", wantErr: mileageErr},
+		{name: "text mileage", modify: func(in *RecordInput) { in.Mileage = json.RawMessage(`"abc"`) }, field: "mileage", wantErr: mileageErr},
+		{name: "mileage with misplaced comma", modify: func(in *RecordInput) { in.Mileage = json.RawMessage(`"1,5"`) }, field: "mileage", wantErr: mileageErr},
+		{name: "mileage with uneven groups", modify: func(in *RecordInput) { in.Mileage = json.RawMessage(`"1,23,456"`) }, field: "mileage", wantErr: mileageErr},
+		{name: "mileage with leading comma", modify: func(in *RecordInput) { in.Mileage = json.RawMessage(`",500"`) }, field: "mileage", wantErr: mileageErr},
+		{name: "mileage with trailing comma", modify: func(in *RecordInput) { in.Mileage = json.RawMessage(`"500,"`) }, field: "mileage", wantErr: mileageErr},
+		{name: "mileage with spaces", modify: func(in *RecordInput) { in.Mileage = json.RawMessage(`"84 500"`) }, field: "mileage", wantErr: mileageErr},
+		{name: "mileage too large", modify: func(in *RecordInput) { in.Mileage = json.RawMessage("2147483648") }, field: "mileage", wantErr: mileageErr},
 		{name: "negative mileage", modify: func(in *RecordInput) { in.Mileage = json.RawMessage("-1") }, field: "mileage", wantErr: "Mileage must not be negative"},
+		{name: "negative grouped mileage", modify: func(in *RecordInput) { in.Mileage = json.RawMessage(`"-1,000"`) }, field: "mileage", wantErr: "Mileage must not be negative"},
 		{name: "negative cost", modify: func(in *RecordInput) { in.Cost = ptr("-1.00") }, field: "cost", wantErr: "Cost must not be negative"},
 		{name: "too many decimals", modify: func(in *RecordInput) { in.Cost = ptr("1.999") }, field: "cost", wantErr: costErr},
 		{name: "cost too large", modify: func(in *RecordInput) { in.Cost = ptr("100000000") }, field: "cost", wantErr: costErr},
 		{name: "cost with currency", modify: func(in *RecordInput) { in.Cost = ptr("$5") }, field: "cost", wantErr: costErr},
-		{name: "cost with comma", modify: func(in *RecordInput) { in.Cost = ptr("1,000") }, field: "cost", wantErr: costErr},
+		{name: "cost with misplaced comma", modify: func(in *RecordInput) { in.Cost = ptr("49,99") }, field: "cost", wantErr: costErr},
+		{name: "cost with uneven groups", modify: func(in *RecordInput) { in.Cost = ptr("1,23,456") }, field: "cost", wantErr: costErr},
+		{name: "cost with leading comma", modify: func(in *RecordInput) { in.Cost = ptr(",500") }, field: "cost", wantErr: costErr},
+		{name: "cost with trailing comma", modify: func(in *RecordInput) { in.Cost = ptr("500,") }, field: "cost", wantErr: costErr},
+		{name: "cost with comma in cents", modify: func(in *RecordInput) { in.Cost = ptr("1.2,5") }, field: "cost", wantErr: costErr},
 		{name: "cost exponent", modify: func(in *RecordInput) { in.Cost = ptr("1e3") }, field: "cost", wantErr: costErr},
 		{name: "cost trailing dot", modify: func(in *RecordInput) { in.Cost = ptr("5.") }, field: "cost", wantErr: costErr},
 		{name: "cost leading dot", modify: func(in *RecordInput) { in.Cost = ptr(".5") }, field: "cost", wantErr: costErr},
@@ -149,6 +161,41 @@ func TestNormalizeAndValidateAcceptsEveryType(t *testing.T) {
 
 		if len(errs) > 0 {
 			t.Fatalf("type %q: %v", typ, errs)
+		}
+	}
+}
+
+func TestParseMileageAcceptsThousandsSeparators(t *testing.T) {
+	for _, raw := range []string{"84500", `"84500"`, `"84,500"`, `" 84,500 "`} {
+		got, msg := parseMileage(json.RawMessage(raw))
+
+		if msg != "" || got == nil || *got != 84500 {
+			t.Fatalf("parseMileage(%s) = %v, %q; want 84500", raw, got, msg)
+		}
+	}
+}
+
+func TestParseMileageTreatsBlankTextAsAbsent(t *testing.T) {
+	got, msg := parseMileage(json.RawMessage(`" "`))
+
+	if msg != "" || got != nil {
+		t.Fatalf("got %v, %q; want nil", got, msg)
+	}
+}
+
+func TestParseCostAcceptsThousandsSeparators(t *testing.T) {
+	tests := map[string]money.Amount{
+		"1234.56":      123456,
+		"1,234.56":     123456,
+		"1,234":        123400,
+		"12,345,678.9": 1234567890,
+	}
+
+	for value, want := range tests {
+		got, msg := parseCost(&value)
+
+		if msg != "" || got == nil || *got != want {
+			t.Fatalf("parseCost(%q) = %v, %q; want %v", value, got, msg, want)
 		}
 	}
 }
@@ -704,7 +751,7 @@ func TestHandlerReturnsFieldErrors(t *testing.T) {
 			want := map[string]string{
 				"type":        "Choose a type from the list",
 				"description": "Description is required",
-				"mileage":     "Mileage must be a whole number",
+				"mileage":     mileageErr,
 				"cost":        "Cost must not be negative",
 			}
 
