@@ -6,7 +6,7 @@ import {
   createMaintenanceRecordAction,
   deleteMaintenanceRecordAction,
   updateMaintenanceRecordAction,
-} from "./actions";
+} from "@/app/(authenticated)/vehicles/[id]/actions";
 
 function formData(fields: Record<string, string>): FormData {
   const data = new FormData();
@@ -57,7 +57,7 @@ describe("createMaintenanceRecordAction", () => {
     );
   });
 
-  it("returns the server's field errors with the submitted values", async () => {
+  it("returns the server's field errors", async () => {
     server.use(
       http.post(`${API_URL}/api/vehicles/7/maintenance`, () =>
         HttpResponse.json(
@@ -73,7 +73,6 @@ describe("createMaintenanceRecordAction", () => {
     const state = await createMaintenanceRecordAction(7, {}, formData(fields));
 
     expect(state).toEqual({
-      values: fields,
       errors: { description: "Description is required" },
     });
   });

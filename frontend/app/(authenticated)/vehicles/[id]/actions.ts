@@ -9,7 +9,6 @@ import {
 import { getVehicle } from "@/lib/vehicles";
 
 export type MaintenanceFormState = {
-  values?: Record<string, string>;
   errors?: Record<string, string>;
   message?: string;
   saved?: boolean;
@@ -46,9 +45,6 @@ async function save(
   recordId: number | undefined,
   formData: FormData,
 ): Promise<MaintenanceFormState> {
-  const values = Object.fromEntries(
-    [...formData].map(([name, value]) => [name, String(value)]),
-  );
   const result = await saveMaintenanceRecord(
     vehicleId,
     recordId,
@@ -62,12 +58,10 @@ async function save(
 
   if (result.status === 404) {
     await refreshAfterNotFound(vehicleId);
-    return { values, message: RECORD_GONE };
+    return { message: RECORD_GONE };
   }
 
-  return result.errors
-    ? { values, errors: result.errors }
-    : { values, message: result.error };
+  return result.errors ? { errors: result.errors } : { message: result.error };
 }
 
 export async function createMaintenanceRecordAction(

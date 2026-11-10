@@ -51,10 +51,7 @@ export function MaintenanceRecordForm({
       const next = await action(previous, formData).catch(
         (error): MaintenanceFormState => {
           unstable_rethrow(error);
-          return {
-            values: Object.fromEntries(formData) as Record<string, string>,
-            message: "Could not reach the server. Please try again.",
-          };
+          return { message: "Could not reach the server. Please try again." };
         },
       );
 
@@ -73,7 +70,7 @@ export function MaintenanceRecordForm({
   }, [state]);
 
   const mileage = record ? record.mileage : defaultMileage;
-  const values = state.values ?? {
+  const values = {
     type: record?.type ?? "",
     performed_at: record?.performed_at ?? format(new Date(), "yyyy-MM-dd"),
     description: record?.description ?? "",

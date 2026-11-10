@@ -45,7 +45,6 @@ describe("MaintenanceRecordForm", () => {
       <MaintenanceRecordForm
         defaultMileage={182000}
         action={async () => ({
-          values: { description: "", mileage: "182,000" },
           errors: { description: "Description is required" },
         })}
         onClose={onClose}
@@ -66,8 +65,7 @@ describe("MaintenanceRecordForm", () => {
     const user = userEvent.setup();
     render(
       <MaintenanceRecordForm
-        action={async (_state, formData) => ({
-          values: Object.fromEntries(formData) as Record<string, string>,
+        action={async () => ({
           errors: { description: "Description is required" },
         })}
         onClose={vi.fn()}
