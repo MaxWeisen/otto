@@ -146,6 +146,50 @@ test("adds, edits and deletes a maintenance record", async ({ page }) => {
   await expect(page.getByText("No maintenance logged yet")).toBeVisible();
 });
 
+test("rejects misplaced thousands separators in mileage and cost", async ({
+  page,
+}) => {
+  const id = await insertVehicle(accord);
+
+  await page.goto(`/vehicles/${id}`);
+  await page.getByRole("button", { name: "Add your first record" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Add maintenance record" });
+  const mileage = dialog.getByRole("textbox", { name: /^Mileage/ });
+  const cost = dialog.getByRole("textbox", { name: /^Cost/ });
+
+  await dialog
+    .getByRole("combobox", { name: "Type" })
+    .selectOption({ label: "Oil change" });
+  await dialog.getByRole("textbox", { name: /^Description/ }).fill("Oil");
+  await mileage.fill("1,5");
+  await cost.fill("49,99");
+  await dialog.getByRole("button", { name: "Add record" }).click();
+
+  await expect(
+    dialog.getByText("Mileage must be a whole number like 84,500"),
+  ).toBeVisible();
+  await expect(
+    dialog.getByText("Cost must be an amount like 1,234.56"),
+  ).toBeVisible();
+  await expect(mileage).toBeFocused();
+  await expect(mileage).toHaveValue("1,5");
+  await expect(cost).toHaveValue("49,99");
+  expect(await findMaintenanceRecords(id)).toEqual([]);
+
+  await mileage.fill("84,500");
+  await cost.fill("1,234.56");
+  await dialog.getByRole("button", { name: "Add record" }).click();
+
+  await expect(dialog).toHaveCount(0);
+  await expect(maintenance(page).getByRole("listitem")).toContainText(
+    "84,500 mi",
+  );
+  expect(await findMaintenanceRecords(id)).toEqual([
+    expect.objectContaining({ mileage: 84500, cost: "1234.56" }),
+  ]);
+});
+
 test("raises the vehicle's mileage to a record's higher reading", async ({
   page,
 }) => {
