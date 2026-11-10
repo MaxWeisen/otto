@@ -12,7 +12,7 @@ const input: MaintenanceInput = {
   type: "oil_change",
   performed_at: "2026-05-09",
   description: "Synthetic 5W-30",
-  mileage: 180500,
+  mileage: "180,500",
   cost: "79.99",
   notes: null,
 };

@@ -57,6 +57,27 @@ describe("createMaintenanceRecordAction", () => {
     );
   });
 
+  it("sends plain-digit mileage as text", async () => {
+    let body: { mileage?: unknown } = {};
+    server.use(
+      http.post(
+        `${API_URL}/api/vehicles/7/maintenance`,
+        async ({ request }) => {
+          body = (await request.json()) as typeof body;
+          return HttpResponse.json({ id: 1 }, { status: 201 });
+        },
+      ),
+    );
+
+    await createMaintenanceRecordAction(
+      7,
+      {},
+      formData({ ...fields, mileage: " 84500 " }),
+    );
+
+    expect(body.mileage).toBe("84500");
+  });
+
   it("returns the server's field errors", async () => {
     server.use(
       http.post(`${API_URL}/api/vehicles/7/maintenance`, () =>

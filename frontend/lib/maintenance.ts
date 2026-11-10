@@ -19,7 +19,7 @@ export type MaintenanceInput = {
   type: string;
   description: string;
   performed_at: string;
-  mileage: number | string | null;
+  mileage: string | null;
   cost: string | null;
   notes: string | null;
 };

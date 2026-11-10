@@ -418,12 +418,12 @@ func parseMileage(raw json.RawMessage) (*int32, string) {
 
 	mileage, err := strconv.ParseInt(strings.ReplaceAll(digits, ",", ""), 10, 32)
 
-	if err != nil {
-		return nil, "Mileage must be a whole number like 84,500"
+	if negative && (err != nil || mileage != 0) {
+		return nil, "Mileage must not be negative"
 	}
 
-	if negative && mileage != 0 {
-		return nil, "Mileage must not be negative"
+	if err != nil {
+		return nil, "Mileage is too large"
 	}
 
 	result := int32(mileage)
