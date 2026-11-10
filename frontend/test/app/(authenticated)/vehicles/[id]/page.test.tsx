@@ -3,8 +3,10 @@ import { http, HttpResponse, type JsonBodyType } from "msw";
 import { describe, expect, it } from "vitest";
 import { NotFoundError } from "@/test/next-mocks";
 import { API_URL, server } from "@/test/server";
-import VehicleNotFound from "./not-found";
-import VehiclePage, { generateMetadata } from "./page";
+import VehicleNotFound from "@/app/(authenticated)/vehicles/[id]/not-found";
+import VehiclePage, {
+  generateMetadata,
+} from "@/app/(authenticated)/vehicles/[id]/page";
 
 const accord = {
   id: 7,

@@ -17,6 +17,7 @@ Set these in `frontend/.env.local`.
 ## Testing
 
 Run `pnpm test` for the Vitest unit and component tests, `pnpm test:watch` to rerun them on change, or `pnpm test:e2e` for the Playwright end-to-end tests.
+Unit and component tests live in `test/`, mirroring the source path of the file they cover, and the Playwright tests live in `e2e/`.
 See the [root README](../README.md#frontend) for what the end-to-end tests need.
 
 ## Formatting

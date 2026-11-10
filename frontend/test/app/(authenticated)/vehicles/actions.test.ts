@@ -12,7 +12,7 @@ import {
   deleteVehicleAction,
   updateVehicleAction,
   type VehicleFormState,
-} from "./actions";
+} from "@/app/(authenticated)/vehicles/actions";
 
 // Pin the clock so the latest accepted model year (next year) is stable.
 beforeAll(() => {
