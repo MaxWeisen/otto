@@ -43,7 +43,7 @@ func main() {
 	queries := store.New(pool)
 	vehiclesService := vehicles.NewService(queries)
 	vehiclesHandler := vehicles.NewHandler(vehiclesService)
-	maintenanceService := maintenance.NewService(queries)
+	maintenanceService := maintenance.NewService(pool)
 	maintenanceHandler := maintenance.NewHandler(maintenanceService)
 
 	vpicHandler := vpic.NewHandler(vpic.NewClient(cfg.VPICBaseURL))

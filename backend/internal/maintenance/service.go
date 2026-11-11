@@ -15,7 +15,15 @@ var ErrUnauthorized = errors.New("unauthorized")
 var ErrVehicleNotFound = errors.New("vehicle not found")
 var ErrRecordNotFound = errors.New("maintenance record not found")
 
+// DB is the database the service runs its queries and transactions on,
+// such as a *pgxpool.Pool.
+type DB interface {
+	store.DBTX
+	Begin(ctx context.Context) (pgx.Tx, error)
+}
+
 type Service struct {
+	db      DB
 	queries *store.Queries
 }
 
@@ -30,9 +38,10 @@ type RecordParams struct {
 	Notes       *string
 }
 
-func NewService(q *store.Queries) *Service {
+func NewService(db DB) *Service {
 	return &Service{
-		queries: q,
+		db:      db,
+		queries: store.New(db),
 	}
 }
 
@@ -47,19 +56,31 @@ func (s *Service) CreateRecord(
 		return store.MaintenanceRecord{}, ErrUnauthorized
 	}
 
-	record, err := s.queries.CreateMaintenanceRecord(
-		ctx,
-		store.CreateMaintenanceRecordParams{
-			Type:        params.Type,
-			Description: params.Description,
-			PerformedAt: params.PerformedAt,
-			Mileage:     params.Mileage,
-			Cost:        params.Cost,
-			Notes:       params.Notes,
-			VehicleID:   vehicleID,
-			UserID:      user.Id,
-		},
-	)
+	var record store.MaintenanceRecord
+
+	err := s.inTx(ctx, func(q *store.Queries) error {
+		var err error
+
+		record, err = q.CreateMaintenanceRecord(
+			ctx,
+			store.CreateMaintenanceRecordParams{
+				Type:        params.Type,
+				Description: params.Description,
+				PerformedAt: params.PerformedAt,
+				Mileage:     params.Mileage,
+				Cost:        params.Cost,
+				Notes:       params.Notes,
+				VehicleID:   vehicleID,
+				UserID:      user.Id,
+			},
+		)
+
+		if err != nil {
+			return err
+		}
+
+		return raiseVehicleMileage(ctx, q, record, user.Id)
+	})
 
 	// The insert selects from the user's own vehicles, so no row means the
 	// vehicle does not exist or belongs to someone else.
@@ -157,20 +178,32 @@ func (s *Service) UpdateRecord(
 		return store.MaintenanceRecord{}, ErrUnauthorized
 	}
 
-	record, err := s.queries.UpdateMaintenanceRecord(
-		ctx,
-		store.UpdateMaintenanceRecordParams{
-			Type:        params.Type,
-			Description: params.Description,
-			PerformedAt: params.PerformedAt,
-			Mileage:     params.Mileage,
-			Cost:        params.Cost,
-			Notes:       params.Notes,
-			ID:          recordID,
-			VehicleID:   vehicleID,
-			UserID:      user.Id,
-		},
-	)
+	var record store.MaintenanceRecord
+
+	err := s.inTx(ctx, func(q *store.Queries) error {
+		var err error
+
+		record, err = q.UpdateMaintenanceRecord(
+			ctx,
+			store.UpdateMaintenanceRecordParams{
+				Type:        params.Type,
+				Description: params.Description,
+				PerformedAt: params.PerformedAt,
+				Mileage:     params.Mileage,
+				Cost:        params.Cost,
+				Notes:       params.Notes,
+				ID:          recordID,
+				VehicleID:   vehicleID,
+				UserID:      user.Id,
+			},
+		)
+
+		if err != nil {
+			return err
+		}
+
+		return raiseVehicleMileage(ctx, q, record, user.Id)
+	})
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return store.MaintenanceRecord{}, ErrRecordNotFound
@@ -212,4 +245,47 @@ func (s *Service) DeleteRecord(
 	}
 
 	return nil
+}
+
+// raiseVehicleMileage raises the vehicle's mileage to the record's mileage
+// when the record's is higher. A record without a mileage leaves the vehicle
+// alone, and the vehicle's mileage is never lowered.
+func raiseVehicleMileage(
+	ctx context.Context,
+	q *store.Queries,
+	record store.MaintenanceRecord,
+	userID int64,
+) error {
+	if record.Mileage == nil {
+		return nil
+	}
+
+	return q.RaiseVehicleMileage(ctx, store.RaiseVehicleMileageParams{
+		Mileage: *record.Mileage,
+		ID:      record.VehicleID,
+		UserID:  userID,
+	})
+}
+
+// inTx runs fn in a transaction, committing when fn succeeds and rolling
+// back when it returns an error.
+func (s *Service) inTx(
+	ctx context.Context,
+	fn func(q *store.Queries) error,
+) error {
+	tx, err := s.db.Begin(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	defer tx.Rollback(ctx)
+
+	err = fn(s.queries.WithTx(tx))
+
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }

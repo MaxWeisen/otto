@@ -20,3 +20,8 @@ RETURNING *;
 
 -- name: DeleteVehicle :execrows
 DELETE FROM vehicles WHERE id = $1 AND user_id = $2;
+
+-- name: RaiseVehicleMileage :exec
+UPDATE vehicles
+SET mileage = GREATEST(COALESCE(mileage, 0), @mileage::int)
+WHERE id = @id AND user_id = @user_id;

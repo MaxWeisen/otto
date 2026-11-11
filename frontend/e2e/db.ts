@@ -48,7 +48,8 @@ export type SeedVehicle = {
 
 /**
  * The google_sub of a second user who signs in nowhere and only owns
- * vehicles, for checking that the test user cannot see them.
+ * vehicles and their maintenance records, for checking that the test user
+ * cannot see them.
  */
 function otherUserGoogleSub(): string {
   return `${e2eGoogleSub()}-other`;
@@ -112,6 +113,57 @@ export function findVehicle(id: number): Promise<SeedVehicle | undefined> {
   });
 }
 
+export type SeedMaintenanceRecord = {
+  type: string;
+  description: string;
+  performed_at: string;
+  mileage?: number;
+  cost?: string;
+  notes?: string;
+};
+
+/** Adds a maintenance record to a vehicle, whoever owns it. */
+export function insertMaintenanceRecord(
+  vehicleId: number,
+  record: SeedMaintenanceRecord,
+): Promise<number> {
+  return withDb(async (db) => {
+    const { rows } = await db.query<{ id: string }>(
+      `INSERT INTO maintenance_records
+         (vehicle_id, type, description, performed_at, mileage, cost, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id`,
+      [
+        vehicleId,
+        record.type,
+        record.description,
+        record.performed_at,
+        record.mileage ?? null,
+        record.cost ?? null,
+        record.notes ?? null,
+      ],
+    );
+
+    return Number(rows[0].id);
+  });
+}
+
+export function findMaintenanceRecords(
+  vehicleId: number,
+): Promise<SeedMaintenanceRecord[]> {
+  return withDb(async (db) => {
+    const { rows } = await db.query<SeedMaintenanceRecord>(
+      `SELECT type, description, to_char(performed_at, 'YYYY-MM-DD')
+         AS performed_at, mileage, cost::text AS cost, notes
+       FROM maintenance_records WHERE vehicle_id = $1
+       ORDER BY performed_at DESC, id DESC`,
+      [vehicleId],
+    );
+
+    return rows;
+  });
+}
+
 /**
  * Removes this run's test user and the other user along with their sessions
  * and vehicles.
@@ -139,17 +191,6 @@ function removeUsers(condition: string, params: string[]): Promise<void> {
       params,
     );
     await db.query(`DELETE FROM users WHERE ${condition}`, params);
-  });
-}
-
-export function insertMaintenanceRecord(vehicleId: number): Promise<void> {
-  return withDb(async (db) => {
-    await db.query(
-      `INSERT INTO maintenance_records
-         (vehicle_id, type, description, performed_at)
-       VALUES ($1, 'oil_change', 'Oil and filter', '2026-01-15')`,
-      [vehicleId],
-    );
   });
 }
 

@@ -29,11 +29,8 @@ var fixedNow = time.Date(2026, time.June, 15, 12, 0, 0, 0, time.UTC)
 // already June 16 in UTC+14.
 const fixedLatestDate = "2026-06-16"
 
-const costErr = `cost must be a decimal amount with at most 8 digits before ` +
-	`and 2 after the decimal point, e.g. "49.99"`
-
-const typeErr = "type must be one of: oil_change, tire_rotation, brakes, " +
-	"inspection, repair, other"
+const costErr = "Cost must be an amount like 1,234.56"
+const mileageErr = "Mileage must be a whole number like 84,500"
 
 func TestMain(m *testing.M) {
 	// Set before any test runs, so parallel tests only ever read it.
@@ -86,40 +83,56 @@ func TestNormalizeAndValidate(t *testing.T) {
 	tests := []struct {
 		name    string
 		modify  func(in *RecordInput)
+		field   string
 		wantErr string
 	}{
 		{name: "valid", modify: func(in *RecordInput) {}},
 		{name: "max length multibyte description", modify: func(in *RecordInput) { in.Description = maxRunes }},
 		{name: "max length notes", modify: func(in *RecordInput) { in.Notes = ptr(strings.Repeat("é", maxNotesLength)) }},
-		{name: "zero mileage", modify: func(in *RecordInput) { in.Mileage = ptr(int32(0)) }},
+		{name: "zero mileage", modify: func(in *RecordInput) { in.Mileage = json.RawMessage("0") }},
 		{name: "zero cost", modify: func(in *RecordInput) { in.Cost = ptr("0") }},
 		{name: "max cost", modify: func(in *RecordInput) { in.Cost = ptr("99999999.99") }},
 		{name: "max cost with leading zeros", modify: func(in *RecordInput) { in.Cost = ptr("0099999999.99") }},
 		{name: "earliest date", modify: func(in *RecordInput) { in.PerformedAt = "1886-01-01" }},
 		{name: "latest date", modify: func(in *RecordInput) { in.PerformedAt = fixedLatestDate }},
-		{name: "blank type", modify: func(in *RecordInput) { in.Type = "  " }, wantErr: "type is required"},
-		{name: "unknown type", modify: func(in *RecordInput) { in.Type = "car_wash" }, wantErr: typeErr},
-		{name: "uppercase type", modify: func(in *RecordInput) { in.Type = "OIL_CHANGE" }, wantErr: typeErr},
-		{name: "blank description", modify: func(in *RecordInput) { in.Description = " \t" }, wantErr: "description is required"},
-		{name: "long description", modify: func(in *RecordInput) { in.Description = long }, wantErr: "description must be at most 255 characters"},
-		{name: "null in description", modify: func(in *RecordInput) { in.Description = "Oil\x00" }, wantErr: "description must not contain null characters"},
-		{name: "long notes", modify: func(in *RecordInput) { in.Notes = &longNotes }, wantErr: "notes must be at most 10000 characters"},
-		{name: "null in notes", modify: func(in *RecordInput) { in.Notes = ptr("a\x00b") }, wantErr: "notes must not contain null characters"},
-		{name: "missing date", modify: func(in *RecordInput) { in.PerformedAt = "" }, wantErr: "performed_at is required"},
-		{name: "timestamp date", modify: func(in *RecordInput) { in.PerformedAt = "2026-05-01T10:00:00Z" }, wantErr: "performed_at must be a date in YYYY-MM-DD format"},
-		{name: "unpadded date", modify: func(in *RecordInput) { in.PerformedAt = "2026-5-1" }, wantErr: "performed_at must be a date in YYYY-MM-DD format"},
-		{name: "impossible date", modify: func(in *RecordInput) { in.PerformedAt = "2026-02-30" }, wantErr: "performed_at must be a date in YYYY-MM-DD format"},
-		{name: "too old date", modify: func(in *RecordInput) { in.PerformedAt = "1885-12-31" }, wantErr: "performed_at must not be before 1886-01-01"},
-		{name: "future date", modify: func(in *RecordInput) { in.PerformedAt = "2026-06-17" }, wantErr: "performed_at must not be in the future"},
-		{name: "negative mileage", modify: func(in *RecordInput) { in.Mileage = ptr(int32(-1)) }, wantErr: "mileage must not be negative"},
-		{name: "negative cost", modify: func(in *RecordInput) { in.Cost = ptr("-1.00") }, wantErr: "cost must not be negative"},
-		{name: "too many decimals", modify: func(in *RecordInput) { in.Cost = ptr("1.999") }, wantErr: costErr},
-		{name: "cost too large", modify: func(in *RecordInput) { in.Cost = ptr("100000000") }, wantErr: costErr},
-		{name: "cost with currency", modify: func(in *RecordInput) { in.Cost = ptr("$5") }, wantErr: costErr},
-		{name: "cost with comma", modify: func(in *RecordInput) { in.Cost = ptr("1,000") }, wantErr: costErr},
-		{name: "cost exponent", modify: func(in *RecordInput) { in.Cost = ptr("1e3") }, wantErr: costErr},
-		{name: "cost trailing dot", modify: func(in *RecordInput) { in.Cost = ptr("5.") }, wantErr: costErr},
-		{name: "cost leading dot", modify: func(in *RecordInput) { in.Cost = ptr(".5") }, wantErr: costErr},
+		{name: "blank type", modify: func(in *RecordInput) { in.Type = "  " }, field: "type", wantErr: "Type is required"},
+		{name: "unknown type", modify: func(in *RecordInput) { in.Type = "car_wash" }, field: "type", wantErr: "Choose a type from the list"},
+		{name: "uppercase type", modify: func(in *RecordInput) { in.Type = "OIL_CHANGE" }, field: "type", wantErr: "Choose a type from the list"},
+		{name: "blank description", modify: func(in *RecordInput) { in.Description = " \t" }, field: "description", wantErr: "Description is required"},
+		{name: "long description", modify: func(in *RecordInput) { in.Description = long }, field: "description", wantErr: "Description must be at most 255 characters"},
+		{name: "null in description", modify: func(in *RecordInput) { in.Description = "Oil\x00" }, field: "description", wantErr: "Description must not contain null characters"},
+		{name: "long notes", modify: func(in *RecordInput) { in.Notes = &longNotes }, field: "notes", wantErr: "Notes must be at most 10000 characters"},
+		{name: "null in notes", modify: func(in *RecordInput) { in.Notes = ptr("a\x00b") }, field: "notes", wantErr: "Notes must not contain null characters"},
+		{name: "missing date", modify: func(in *RecordInput) { in.PerformedAt = "" }, field: "performed_at", wantErr: "Date is required"},
+		{name: "timestamp date", modify: func(in *RecordInput) { in.PerformedAt = "2026-05-01T10:00:00Z" }, field: "performed_at", wantErr: "Date must be a valid date"},
+		{name: "unpadded date", modify: func(in *RecordInput) { in.PerformedAt = "2026-5-1" }, field: "performed_at", wantErr: "Date must be a valid date"},
+		{name: "impossible date", modify: func(in *RecordInput) { in.PerformedAt = "2026-02-30" }, field: "performed_at", wantErr: "Date must be a valid date"},
+		{name: "too old date", modify: func(in *RecordInput) { in.PerformedAt = "1885-12-31" }, field: "performed_at", wantErr: "Date must not be before 1886"},
+		{name: "future date", modify: func(in *RecordInput) { in.PerformedAt = "2026-06-17" }, field: "performed_at", wantErr: "Date must not be in the future"},
+		{name: "fractional mileage", modify: func(in *RecordInput) { in.Mileage = json.RawMessage("1.5") }, field: "mileage", wantErr: mileageErr},
+		{name: "text mileage", modify: func(in *RecordInput) { in.Mileage = json.RawMessage(`"abc"`) }, field: "mileage", wantErr: mileageErr},
+		{name: "mileage with misplaced comma", modify: func(in *RecordInput) { in.Mileage = json.RawMessage(`"1,5"`) }, field: "mileage", wantErr: mileageErr},
+		{name: "mileage with uneven groups", modify: func(in *RecordInput) { in.Mileage = json.RawMessage(`"1,23,456"`) }, field: "mileage", wantErr: mileageErr},
+		{name: "mileage with leading comma", modify: func(in *RecordInput) { in.Mileage = json.RawMessage(`",500"`) }, field: "mileage", wantErr: mileageErr},
+		{name: "mileage with trailing comma", modify: func(in *RecordInput) { in.Mileage = json.RawMessage(`"500,"`) }, field: "mileage", wantErr: mileageErr},
+		{name: "mileage with spaces", modify: func(in *RecordInput) { in.Mileage = json.RawMessage(`"84 500"`) }, field: "mileage", wantErr: mileageErr},
+		{name: "mileage too large", modify: func(in *RecordInput) { in.Mileage = json.RawMessage("2147483648") }, field: "mileage", wantErr: "Mileage is too large"},
+		{name: "grouped mileage too large", modify: func(in *RecordInput) { in.Mileage = json.RawMessage(`"3,000,000,000"`) }, field: "mileage", wantErr: "Mileage is too large"},
+		{name: "negative mileage", modify: func(in *RecordInput) { in.Mileage = json.RawMessage("-1") }, field: "mileage", wantErr: "Mileage must not be negative"},
+		{name: "negative grouped mileage", modify: func(in *RecordInput) { in.Mileage = json.RawMessage(`"-1,000"`) }, field: "mileage", wantErr: "Mileage must not be negative"},
+		{name: "negative mileage beyond the range", modify: func(in *RecordInput) { in.Mileage = json.RawMessage(`"-3,000,000,000"`) }, field: "mileage", wantErr: "Mileage must not be negative"},
+		{name: "negative cost", modify: func(in *RecordInput) { in.Cost = ptr("-1.00") }, field: "cost", wantErr: "Cost must not be negative"},
+		{name: "too many decimals", modify: func(in *RecordInput) { in.Cost = ptr("1.999") }, field: "cost", wantErr: costErr},
+		{name: "cost too large", modify: func(in *RecordInput) { in.Cost = ptr("100000000") }, field: "cost", wantErr: costErr},
+		{name: "cost with currency", modify: func(in *RecordInput) { in.Cost = ptr("$5") }, field: "cost", wantErr: costErr},
+		{name: "cost with misplaced comma", modify: func(in *RecordInput) { in.Cost = ptr("49,99") }, field: "cost", wantErr: costErr},
+		{name: "cost with uneven groups", modify: func(in *RecordInput) { in.Cost = ptr("1,23,456") }, field: "cost", wantErr: costErr},
+		{name: "cost with leading comma", modify: func(in *RecordInput) { in.Cost = ptr(",500") }, field: "cost", wantErr: costErr},
+		{name: "cost with trailing comma", modify: func(in *RecordInput) { in.Cost = ptr("500,") }, field: "cost", wantErr: costErr},
+		{name: "cost with comma in cents", modify: func(in *RecordInput) { in.Cost = ptr("1.2,5") }, field: "cost", wantErr: costErr},
+		{name: "cost exponent", modify: func(in *RecordInput) { in.Cost = ptr("1e3") }, field: "cost", wantErr: costErr},
+		{name: "cost trailing dot", modify: func(in *RecordInput) { in.Cost = ptr("5.") }, field: "cost", wantErr: costErr},
+		{name: "cost leading dot", modify: func(in *RecordInput) { in.Cost = ptr(".5") }, field: "cost", wantErr: costErr},
 	}
 
 	for _, tt := range tests {
@@ -127,17 +140,15 @@ func TestNormalizeAndValidate(t *testing.T) {
 			input := validInput()
 			tt.modify(&input)
 
-			_, err := input.normalizeAndValidate()
+			_, errs := input.normalizeAndValidate()
 
-			if tt.wantErr == "" {
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
-				return
+			want := map[string]string{}
+			if tt.wantErr != "" {
+				want[tt.field] = tt.wantErr
 			}
 
-			if err == nil || err.Error() != tt.wantErr {
-				t.Fatalf("got error %v, want %q", err, tt.wantErr)
+			if !reflect.DeepEqual(errs, want) {
+				t.Fatalf("got errors %v, want %v", errs, want)
 			}
 		})
 	}
@@ -148,10 +159,45 @@ func TestNormalizeAndValidateAcceptsEveryType(t *testing.T) {
 		input := validInput()
 		input.Type = typ
 
-		_, err := input.normalizeAndValidate()
+		_, errs := input.normalizeAndValidate()
 
-		if err != nil {
-			t.Fatalf("type %q: %v", typ, err)
+		if len(errs) > 0 {
+			t.Fatalf("type %q: %v", typ, errs)
+		}
+	}
+}
+
+func TestParseMileageAcceptsThousandsSeparators(t *testing.T) {
+	for _, raw := range []string{"84500", `"84500"`, `"84,500"`, `" 84,500 "`} {
+		got, msg := parseMileage(json.RawMessage(raw))
+
+		if msg != "" || got == nil || *got != 84500 {
+			t.Fatalf("parseMileage(%s) = %v, %q; want 84500", raw, got, msg)
+		}
+	}
+}
+
+func TestParseMileageTreatsBlankTextAsAbsent(t *testing.T) {
+	got, msg := parseMileage(json.RawMessage(`" "`))
+
+	if msg != "" || got != nil {
+		t.Fatalf("got %v, %q; want nil", got, msg)
+	}
+}
+
+func TestParseCostAcceptsThousandsSeparators(t *testing.T) {
+	tests := map[string]money.Amount{
+		"1234.56":      123456,
+		"1,234.56":     123456,
+		"1,234":        123400,
+		"12,345,678.9": 1234567890,
+	}
+
+	for value, want := range tests {
+		got, msg := parseCost(&value)
+
+		if msg != "" || got == nil || *got != want {
+			t.Fatalf("parseCost(%q) = %v, %q; want %v", value, got, msg, want)
 		}
 	}
 }
@@ -161,15 +207,15 @@ func TestNormalizeAndValidateNormalizes(t *testing.T) {
 		Type:        " brakes ",
 		Description: "  Front pads ",
 		PerformedAt: " 2026-05-01 ",
-		Mileage:     ptr(int32(0)),
+		Mileage:     json.RawMessage("0"),
 		Cost:        ptr(" 120.5 "),
 		Notes:       ptr("   "),
 	}
 
-	got, err := input.normalizeAndValidate()
+	got, errs := input.normalizeAndValidate()
 
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if len(errs) > 0 {
+		t.Fatalf("unexpected errors: %v", errs)
 	}
 
 	want := RecordParams{
@@ -186,10 +232,10 @@ func TestNormalizeAndValidateNormalizes(t *testing.T) {
 
 	input.Cost = ptr("")
 
-	got, err = input.normalizeAndValidate()
+	got, errs = input.normalizeAndValidate()
 
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if len(errs) > 0 {
+		t.Fatalf("unexpected errors: %v", errs)
 	}
 
 	if got.Cost != nil {
@@ -637,8 +683,6 @@ var recordRoutes = []route{getRoute, updateRoute, deleteRoute}
 func TestHandlerRejectsInvalidBody(t *testing.T) {
 	t.Parallel()
 
-	long := strings.Repeat("a", maxDescriptionLength+1)
-
 	tests := []struct {
 		name    string
 		body    string
@@ -669,61 +713,6 @@ func TestHandlerRejectsInvalidBody(t *testing.T) {
 			body:    validBody + `{}`,
 			wantErr: "request body must contain a single JSON object",
 		},
-		{
-			name:    "missing type",
-			body:    `{"description":"Oil","performed_at":"2026-05-01"}`,
-			wantErr: "type is required",
-		},
-		{
-			name:    "unknown type",
-			body:    `{"type":"detailing","description":"Oil","performed_at":"2026-05-01"}`,
-			wantErr: typeErr,
-		},
-		{
-			name:    "blank description",
-			body:    `{"type":"oil_change","description":"  ","performed_at":"2026-05-01"}`,
-			wantErr: "description is required",
-		},
-		{
-			name:    "long description",
-			body:    `{"type":"oil_change","description":"` + long + `","performed_at":"2026-05-01"}`,
-			wantErr: "description must be at most 255 characters",
-		},
-		{
-			name:    "missing performed_at",
-			body:    `{"type":"oil_change","description":"Oil"}`,
-			wantErr: "performed_at is required",
-		},
-		{
-			name:    "bad performed_at",
-			body:    `{"type":"oil_change","description":"Oil","performed_at":"05/01/2026"}`,
-			wantErr: "performed_at must be a date in YYYY-MM-DD format",
-		},
-		{
-			name:    "future performed_at",
-			body:    `{"type":"oil_change","description":"Oil","performed_at":"2026-06-17"}`,
-			wantErr: "performed_at must not be in the future",
-		},
-		{
-			name:    "negative mileage",
-			body:    `{"type":"oil_change","description":"Oil","performed_at":"2026-05-01","mileage":-1}`,
-			wantErr: "mileage must not be negative",
-		},
-		{
-			name:    "negative cost",
-			body:    `{"type":"oil_change","description":"Oil","performed_at":"2026-05-01","cost":"-5"}`,
-			wantErr: "cost must not be negative",
-		},
-		{
-			name:    "invalid cost",
-			body:    `{"type":"oil_change","description":"Oil","performed_at":"2026-05-01","cost":"4.999"}`,
-			wantErr: costErr,
-		},
-		{
-			name:    "null byte",
-			body:    `{"type":"oil_change","description":"Oil\u0000","performed_at":"2026-05-01"}`,
-			wantErr: "description must not contain null characters",
-		},
 	}
 
 	for _, rt := range bodyRoutes {
@@ -739,6 +728,40 @@ func TestHandlerRejectsInvalidBody(t *testing.T) {
 				svc.assertNotCalled(t)
 			})
 		}
+	}
+}
+
+func TestHandlerReturnsFieldErrors(t *testing.T) {
+	t.Parallel()
+
+	body := `{"type":"detailing","description":" ","performed_at":"2026-05-01",` +
+		`"mileage":"abc","cost":"-5"}`
+
+	for _, rt := range bodyRoutes {
+		t.Run(rt.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc := &fakeService{}
+
+			rec := serve(t, svc, rt.method, rt.target("7", "42"), body)
+
+			got := decodeResponse[struct {
+				Error  string            `json:"error"`
+				Errors map[string]string `json:"errors"`
+			}](t, rec, http.StatusBadRequest)
+
+			want := map[string]string{
+				"type":        "Choose a type from the list",
+				"description": "Description is required",
+				"mileage":     mileageErr,
+				"cost":        "Cost must not be negative",
+			}
+
+			if got.Error != "Check the highlighted fields." || !reflect.DeepEqual(got.Errors, want) {
+				t.Fatalf("got %+v, want errors %v", got, want)
+			}
+			svc.assertNotCalled(t)
+		})
 	}
 }
 

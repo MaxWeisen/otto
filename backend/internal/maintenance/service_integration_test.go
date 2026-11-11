@@ -5,6 +5,7 @@ package maintenance_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -19,7 +20,7 @@ import (
 
 func TestServiceCRUD(t *testing.T) {
 	tx, q := testutil.TxDB(t)
-	svc := maintenance.NewService(q)
+	svc := maintenance.NewService(tx)
 	ctx, _ := userContext(t, tx)
 	vehicle := createVehicle(t, ctx, q)
 
@@ -116,7 +117,7 @@ func TestServiceCRUD(t *testing.T) {
 
 func TestServiceStoresCostExactly(t *testing.T) {
 	tx, q := testutil.TxDB(t)
-	svc := maintenance.NewService(q)
+	svc := maintenance.NewService(tx)
 	ctx, _ := userContext(t, tx)
 	vehicle := createVehicle(t, ctx, q)
 
@@ -155,7 +156,7 @@ func TestServiceStoresCostExactly(t *testing.T) {
 
 func TestServiceListOrdersByPerformedAtThenID(t *testing.T) {
 	tx, q := testutil.TxDB(t)
-	svc := maintenance.NewService(q)
+	svc := maintenance.NewService(tx)
 	ctx, _ := userContext(t, tx)
 	vehicle := createVehicle(t, ctx, q)
 
@@ -184,7 +185,7 @@ func TestServiceListOrdersByPerformedAtThenID(t *testing.T) {
 
 func TestServiceListEmptyAndMissingVehicle(t *testing.T) {
 	tx, q := testutil.TxDB(t)
-	svc := maintenance.NewService(q)
+	svc := maintenance.NewService(tx)
 	ctx, _ := userContext(t, tx)
 	vehicle := createVehicle(t, ctx, q)
 
@@ -232,7 +233,7 @@ func TestServiceListEmptyAndMissingVehicle(t *testing.T) {
 
 func TestServiceRecordMustBelongToVehicleInPath(t *testing.T) {
 	tx, q := testutil.TxDB(t)
-	svc := maintenance.NewService(q)
+	svc := maintenance.NewService(tx)
 	ctx, _ := userContext(t, tx)
 	truck := createVehicle(t, ctx, q)
 	car := createVehicle(t, ctx, q)
@@ -269,7 +270,7 @@ func TestServiceRecordMustBelongToVehicleInPath(t *testing.T) {
 
 func TestServiceCascadesVehicleDelete(t *testing.T) {
 	tx, q := testutil.TxDB(t)
-	svc := maintenance.NewService(q)
+	svc := maintenance.NewService(tx)
 	ctx, user := userContext(t, tx)
 	vehicle := createVehicle(t, ctx, q)
 	other := createVehicle(t, ctx, q)
@@ -301,15 +302,17 @@ func TestServiceCascadesVehicleDelete(t *testing.T) {
 
 func TestServiceIsolatesUsers(t *testing.T) {
 	tx, q := testutil.TxDB(t)
-	svc := maintenance.NewService(q)
+	svc := maintenance.NewService(tx)
 	ctxA, _ := userContext(t, tx)
 	ctxB, _ := userContext(t, tx)
 	vehicleA := createVehicle(t, ctxA, q)
 	vehicleB := createVehicle(t, ctxB, q)
 
 	recordA := createRecord(t, ctxA, svc, vehicleA.ID, "2026-05-01")
+	hijack := validParams(t)
+	hijack.Mileage = new(int32(999999))
 
-	_, err := svc.CreateRecord(ctxB, vehicleA.ID, validParams(t))
+	_, err := svc.CreateRecord(ctxB, vehicleA.ID, hijack)
 
 	if !errors.Is(err, maintenance.ErrVehicleNotFound) {
 		t.Errorf("B CreateRecord(A's vehicle) err = %v, want ErrVehicleNotFound", err)
@@ -333,6 +336,7 @@ func TestServiceIsolatesUsers(t *testing.T) {
 			Type:        "other",
 			Description: "Hijacked",
 			PerformedAt: date(t, "2026-05-01"),
+			Mileage:     new(int32(999999)),
 		})
 
 		if !errors.Is(err, maintenance.ErrRecordNotFound) {
@@ -358,6 +362,10 @@ func TestServiceIsolatesUsers(t *testing.T) {
 		t.Errorf("A's record = %+v, want unchanged %+v", list[0], recordA)
 	}
 
+	if mileage := vehicleMileage(t, ctxA, q, vehicleA.ID); mileage != nil {
+		t.Errorf("A's vehicle mileage = %d, want unchanged NULL", *mileage)
+	}
+
 	listB, err := svc.ListRecords(ctxB, vehicleB.ID)
 
 	if err != nil {
@@ -366,9 +374,135 @@ func TestServiceIsolatesUsers(t *testing.T) {
 	assertIDs(t, listB)
 }
 
+func TestServiceRaisesVehicleMileage(t *testing.T) {
+	tx, q := testutil.TxDB(t)
+	svc := maintenance.NewService(tx)
+	ctx, _ := userContext(t, tx)
+	vehicle := createVehicle(t, ctx, q)
+	setVehicleMileage(t, tx, vehicle.ID, 100000)
+
+	params := func(mileage *int32) maintenance.RecordParams {
+		p := validParams(t)
+		p.Mileage = mileage
+
+		return p
+	}
+	mustCreate := func(mileage *int32) store.MaintenanceRecord {
+		t.Helper()
+
+		record, err := svc.CreateRecord(ctx, vehicle.ID, params(mileage))
+
+		if err != nil {
+			t.Fatalf("CreateRecord: %v", err)
+		}
+
+		return record
+	}
+	mustUpdate := func(recordID int64, mileage *int32) {
+		t.Helper()
+
+		_, err := svc.UpdateRecord(ctx, vehicle.ID, recordID, params(mileage))
+
+		if err != nil {
+			t.Fatalf("UpdateRecord: %v", err)
+		}
+	}
+
+	mustCreate(nil)
+	assertVehicleMileage(t, ctx, q, vehicle.ID, 100000)
+
+	lower := mustCreate(new(int32(90000)))
+	assertVehicleMileage(t, ctx, q, vehicle.ID, 100000)
+
+	higher := mustCreate(new(int32(120000)))
+	assertVehicleMileage(t, ctx, q, vehicle.ID, 120000)
+
+	mustUpdate(higher.ID, new(int32(110000)))
+	assertVehicleMileage(t, ctx, q, vehicle.ID, 120000)
+
+	mustUpdate(lower.ID, new(int32(130000)))
+	assertVehicleMileage(t, ctx, q, vehicle.ID, 130000)
+
+	mustUpdate(lower.ID, nil)
+	assertVehicleMileage(t, ctx, q, vehicle.ID, 130000)
+
+	err := svc.DeleteRecord(ctx, vehicle.ID, higher.ID)
+
+	if err != nil {
+		t.Fatalf("DeleteRecord: %v", err)
+	}
+	assertVehicleMileage(t, ctx, q, vehicle.ID, 130000)
+}
+
+func TestServiceSetsUnknownVehicleMileage(t *testing.T) {
+	tx, q := testutil.TxDB(t)
+	svc := maintenance.NewService(tx)
+	ctx, _ := userContext(t, tx)
+	vehicle := createVehicle(t, ctx, q)
+	params := validParams(t)
+	params.Mileage = new(int32(5200))
+
+	_, err := svc.CreateRecord(ctx, vehicle.ID, params)
+
+	if err != nil {
+		t.Fatalf("CreateRecord: %v", err)
+	}
+	assertVehicleMileage(t, ctx, q, vehicle.ID, 5200)
+}
+
+func TestServiceSavesRecordAndMileageTogether(t *testing.T) {
+	tx, q := testutil.TxDB(t)
+	svc := maintenance.NewService(tx)
+	ctx, _ := userContext(t, tx)
+	vehicle := createVehicle(t, ctx, q)
+	record := createRecord(t, ctx, svc, vehicle.ID, "2026-05-01")
+	setVehicleMileage(t, tx, vehicle.ID, 100000)
+
+	// Make raising this vehicle's mileage past 150,000 fail, so the record
+	// write before it has to be rolled back.
+	_, err := tx.Exec(context.Background(), fmt.Sprintf(
+		`ALTER TABLE vehicles ADD CONSTRAINT test_mileage_cap
+		CHECK (id <> %d OR mileage <= 150000)`,
+		vehicle.ID,
+	))
+
+	if err != nil {
+		t.Fatalf("add constraint: %v", err)
+	}
+
+	params := validParams(t)
+	params.Description = "Should not be saved"
+	params.Mileage = new(int32(160000))
+
+	_, err = svc.CreateRecord(ctx, vehicle.ID, params)
+
+	if err == nil {
+		t.Fatal("CreateRecord err = nil, want the mileage update's error")
+	}
+	if n := countRecords(t, tx, vehicle.ID); n != 1 {
+		t.Errorf("records after failed CreateRecord = %d, want 1", n)
+	}
+
+	_, err = svc.UpdateRecord(ctx, vehicle.ID, record.ID, params)
+
+	if err == nil {
+		t.Fatal("UpdateRecord err = nil, want the mileage update's error")
+	}
+
+	got, err := svc.GetRecord(ctx, vehicle.ID, record.ID)
+
+	if err != nil {
+		t.Fatalf("GetRecord: %v", err)
+	}
+	if got.Description != record.Description || got.Mileage != nil {
+		t.Errorf("record after failed UpdateRecord = %+v, want unchanged %+v", got, record)
+	}
+	assertVehicleMileage(t, ctx, q, vehicle.ID, 100000)
+}
+
 func TestServiceRequiresUser(t *testing.T) {
-	_, q := testutil.TxDB(t)
-	svc := maintenance.NewService(q)
+	tx, _ := testutil.TxDB(t)
+	svc := maintenance.NewService(tx)
 	ctx := context.Background()
 
 	_, err := svc.ListRecords(ctx, 1)
@@ -497,6 +631,55 @@ func createRecord(
 	}
 
 	return record
+}
+
+func setVehicleMileage(t *testing.T, tx pgx.Tx, vehicleID int64, mileage int32) {
+	t.Helper()
+
+	_, err := tx.Exec(context.Background(),
+		`UPDATE vehicles SET mileage = $1 WHERE id = $2`,
+		mileage, vehicleID,
+	)
+
+	if err != nil {
+		t.Fatalf("set vehicle mileage: %v", err)
+	}
+}
+
+// vehicleMileage reads the mileage of a vehicle owned by the user in ctx.
+func vehicleMileage(
+	t *testing.T,
+	ctx context.Context,
+	q *store.Queries,
+	vehicleID int64,
+) *int32 {
+	t.Helper()
+
+	user, _ := auth.UserFromContext(ctx)
+
+	vehicle, err := q.GetVehicle(ctx, store.GetVehicleParams{ID: vehicleID, UserID: user.Id})
+
+	if err != nil {
+		t.Fatalf("get vehicle: %v", err)
+	}
+
+	return vehicle.Mileage
+}
+
+func assertVehicleMileage(
+	t *testing.T,
+	ctx context.Context,
+	q *store.Queries,
+	vehicleID int64,
+	want int32,
+) {
+	t.Helper()
+
+	got := vehicleMileage(t, ctx, q, vehicleID)
+
+	if got == nil || *got != want {
+		t.Errorf("vehicle mileage = %v, want %d", got, want)
+	}
 }
 
 func countRecords(t *testing.T, tx pgx.Tx, vehicleID int64) int {

@@ -119,6 +119,17 @@ Inputs are validated with the same rules as vehicles, and an unreachable or fail
 Upstream requests time out after 5 seconds, and answers are cached in memory for 24 hours in LRU caches of up to 1000 entries each.
 Set `VPIC_BASE_URL` to point it at another vPIC-compatible server; it defaults to `https://vpic.nhtsa.dot.gov/api`.
 
+### Maintenance records
+
+Each vehicle's maintenance history lives under `/api/vehicles/<id>/maintenance`, for the signed-in owner only:
+
+- `GET /` lists the records, `POST /` adds one, and `GET`, `PUT` and `DELETE /<recordId>` read, replace and remove a single record.
+- A vehicle or record that belongs to another user answers 404 and is left unchanged.
+- `mileage` is a JSON number or a string, and `cost` a string; both may use commas as thousands separators, such as `"84,500"` or `"1,234.56"`, and any other comma is a field error.
+- An invalid record answers 400 with `{"error": "...", "errors": {"<field>": "<message>"}}`, one message per invalid field, which the frontend shows next to each field.
+- Adding or updating a record with a mileage higher than the vehicle's raises the vehicle's mileage to match, in the same transaction as the record write.
+  The vehicle's mileage is never lowered, and deleting a record leaves it alone.
+
 ## Frontend
 
 ### Running tests
@@ -138,7 +149,7 @@ Set `E2E_VPIC_PORT`, `E2E_BACKEND_PORT` or `E2E_FRONTEND_PORT` to use other port
 They need Go to run the backend, `goose` on the `PATH` to migrate the database, and Postgres with the `otto_test` database described above.
 `E2E_DATABASE_URL` defaults to the docker-compose `otto_test` database, and the tests refuse to run against any database other than `otto_test`.
 A signed-in test user is created directly in the database, so no Google sign-in is needed.
-A second user that owns vehicles but never signs in is created the same way, to check that the test user cannot see, edit or delete other people's vehicles.
+A second user that owns vehicles but never signs in is created the same way, to check that the test user cannot see, edit or delete other people's vehicles or their maintenance records.
 To run them:
 
 ```sh
